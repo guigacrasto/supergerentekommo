@@ -672,3 +672,14 @@ tr:hover td {
   font-size: 0.85rem;
   color: var(--text-secondary);
 }
+/* Team labels in sidebar */
+.team-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.25rem 0.75rem 0.1rem;
+}
+
+.team-label.azul { color: #3b82f6; }
+.team-label.amarela { color: #f59e0b; }
