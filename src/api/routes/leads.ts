@@ -1,5 +1,7 @@
 import { Router } from "express";
 import { KommoService } from "../../services/kommo.js";
+import { TeamKey, TEAMS } from "../../config.js";
+import { requireAuth, AuthRequest } from "../middleware/requireAuth.js";
 
 function formatDateOnly(timestamp: number): string {
   const date = new Date(timestamp * 1000);
@@ -20,18 +22,35 @@ function formatDateTimeGMT3(date: Date): string {
   return `${dd}/${mm}/${yyyy} ${hh}:${min} (GMT-3)`;
 }
 
-export function leadsRouter(service: KommoService) {
+export function leadsRouter(services: Record<TeamKey, KommoService>) {
   const router = Router();
+  router.use(requireAuth as any);
 
-  // GET /api/leads/new/:pipelineId — contagem de novos leads no período
-  router.get("/new/:pipelineId", async (req, res) => {
+  // GET /api/leads/new/:pipelineId — find which team owns this pipeline, then fetch leads
+  router.get("/new/:pipelineId", async (req: AuthRequest, res) => {
     const { pipelineId } = req.params;
     const { from, to } = req.query;
+    const userTeams = req.userTeams || [];
 
     try {
-      const pipelines = await service.getPipelines();
-      const pipe = pipelines.find(p => p.id === parseInt(pipelineId));
-      if (!pipe) return res.status(404).json({ error: "Pipeline não encontrado" });
+      // Find the team that owns this pipeline ID
+      let service: KommoService | null = null;
+      let pipe: any = null;
+
+      for (const team of userTeams) {
+        if (!TEAMS[team].subdomain) continue;
+        const pipelines = await services[team].getPipelines();
+        const found = pipelines.find((p: any) => p.id === parseInt(pipelineId as string));
+        if (found) {
+          service = services[team];
+          pipe = found;
+          break;
+        }
+      }
+
+      if (!service || !pipe) {
+        return res.status(404).json({ error: "Pipeline não encontrado" });
+      }
 
       const newLeadStatuses = pipe._embedded.statuses
         .filter((s: any) =>
@@ -44,7 +63,7 @@ export function leadsRouter(service: KommoService) {
         newLeadStatuses.push(pipe._embedded.statuses[0].id);
       }
 
-      const filterCreated: any = { pipeline_id: [parseInt(pipelineId)] };
+      const filterCreated: any = { pipeline_id: [parseInt(pipelineId as string)] };
       if (from || to) {
         filterCreated.created_at = {};
         if (from) filterCreated.created_at.from = parseInt(from as string);
@@ -53,9 +72,9 @@ export function leadsRouter(service: KommoService) {
 
       const leadsCreated = await service.getLeads({ filter: filterCreated, limit: 250 });
       const filteredCreated = leadsCreated.filter(
-        l => !l.name.toLowerCase().includes("autolead")
+        (l) => !l.name.toLowerCase().includes("autolead")
       );
-      const remainingLeads = filteredCreated.filter(l =>
+      const remainingLeads = filteredCreated.filter((l) =>
         newLeadStatuses.includes(l.status_id)
       );
 
