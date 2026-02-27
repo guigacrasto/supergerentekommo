@@ -4,12 +4,14 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { kommoConfig, validateConfig, STATUS } from "../config.js";
+import { kommoConfig, validateConfig } from "../config.js";
 import { KommoService } from "../services/kommo.js";
+
+const STATUS = { WON: 142, LOST: 143 };
 
 validateConfig();
 
-const kommoService = new KommoService(kommoConfig);
+const kommoService = new KommoService(kommoConfig, "azul");
 
 const server = new Server(
   { name: "kommo-mcp-agent", version: "1.0.0" },
