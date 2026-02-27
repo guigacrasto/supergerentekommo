@@ -9,6 +9,7 @@ import { reportsRouter } from "./routes/reports.js";
 import { chatRouter } from "./routes/chat.js";
 import { authRouter } from "./routes/auth.js";
 import { adminRouter } from "./routes/admin.js";
+import { oauthRouter } from "./routes/oauth.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -25,6 +26,7 @@ export function createServer(service: KommoService) {
   app.use("/api/chat", chatRouter(service));
   app.use("/api/auth", authRouter());
   app.use("/api/admin", adminRouter());
+  app.use("/api/oauth", oauthRouter(service));
 
   // Servir o frontend React compilado
   const webPath = join(__dirname, "../../web/dist");

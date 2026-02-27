@@ -1,13 +1,16 @@
 import axios, { AxiosInstance } from "axios";
 import { KommoConfig, Lead, Message } from "../types/index.js";
 import qs from "qs";
+import { loadTokens, saveTokens } from "./token-store.js";
 
 export class KommoService {
     public client: AxiosInstance;
     private config: KommoConfig;
+    private currentAccessToken: string;
 
     constructor(config: KommoConfig) {
         this.config = config;
+        this.currentAccessToken = config.accessToken ?? "";
         this.client = axios.create({
             baseURL: `https://${config.subdomain}.kommo.com/api/v4`,
             headers: {
@@ -18,6 +21,89 @@ export class KommoService {
                 serialize: (params) => qs.stringify(params, { arrayFormat: 'brackets' })
             }
         });
+
+        // Auto-refresh: on 401 from Kommo, try to refresh the token and retry once
+        this.client.interceptors.response.use(
+            (response) => response,
+            async (error) => {
+                const original = error.config;
+                if (error.response?.status === 401 && !original._retried) {
+                    original._retried = true;
+                    try {
+                        const newToken = await this.refreshAccessToken();
+                        original.headers["Authorization"] = `Bearer ${newToken}`;
+                        return this.client(original);
+                    } catch (refreshErr) {
+                        console.error("[KommoService] Token refresh failed:", refreshErr);
+                    }
+                }
+                return Promise.reject(error);
+            }
+        );
+    }
+
+    /** Called once on startup: loads the latest token from Supabase if available */
+    public async loadStoredToken(): Promise<void> {
+        try {
+            const stored = await loadTokens();
+            if (stored?.accessToken && stored.accessToken !== this.currentAccessToken) {
+                console.log("[KommoService] Using stored access token from Supabase");
+                this.setAccessToken(stored.accessToken);
+            }
+        } catch (e) {
+            console.warn("[KommoService] Could not load stored token, using env token:", e);
+        }
+    }
+
+    private setAccessToken(token: string): void {
+        this.currentAccessToken = token;
+        this.client.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+    }
+
+    /** Exchange a refresh_token for a new access_token + refresh_token */
+    public async refreshAccessToken(): Promise<string> {
+        const stored = await loadTokens();
+        if (!stored?.refreshToken) {
+            throw new Error("No refresh token available. Please re-authorize via the admin panel.");
+        }
+
+        console.log("[KommoService] Refreshing access token...");
+        const response = await axios.post(
+            `https://${this.config.subdomain}.kommo.com/oauth2/access_token`,
+            {
+                client_id: this.config.clientId,
+                client_secret: this.config.clientSecret,
+                grant_type: "refresh_token",
+                refresh_token: stored.refreshToken,
+                redirect_uri: this.config.redirectUri,
+            }
+        );
+
+        const { access_token, refresh_token } = response.data;
+        await saveTokens({ accessToken: access_token, refreshToken: refresh_token });
+        this.setAccessToken(access_token);
+        console.log("[KommoService] Token refreshed and saved.");
+        return access_token;
+    }
+
+    /** Exchange an authorization code for access_token + refresh_token (OAuth step 2) */
+    public async exchangeAuthCode(code: string): Promise<{ accessToken: string; refreshToken: string }> {
+        const response = await axios.post(
+            `https://${this.config.subdomain}.kommo.com/oauth2/access_token`,
+            {
+                client_id: this.config.clientId,
+                client_secret: this.config.clientSecret,
+                grant_type: "authorization_code",
+                code,
+                redirect_uri: this.config.redirectUri,
+            }
+        );
+
+        const { access_token, refresh_token } = response.data;
+        await saveTokens({ accessToken: access_token, refreshToken: refresh_token });
+        this.setAccessToken(access_token);
+        console.log("[KommoService] Authorization code exchanged, tokens saved.");
+        return { accessToken: access_token, refreshToken: refresh_token };
     }
 
     public async getRecentLeads(limit: number = 10): Promise<Lead[]> {
@@ -133,10 +219,8 @@ export class KommoService {
 
                 allLeads = allLeads.concat(leads);
 
-                // If we got fewer leads than the limit, we've reached the end
                 if (leads.length < limit) break;
 
-                // Safety break to prevent infinite loops in weird cases
                 if (page > 100) {
                     console.warn("[Kommo] Reached 100 pages of leads, stopping for safety.");
                     break;

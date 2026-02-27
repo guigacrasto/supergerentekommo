@@ -609,3 +609,66 @@ tr:hover td {
 .action-btn:hover { opacity: 0.8; }
 .action-btn.approve { background: rgba(16, 185, 129, 0.2); color: #34d399; }
 .action-btn.deny { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+
+/* Token renewal card */
+.token-status-card {
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.token-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.token-label { color: var(--text-secondary); }
+.token-value { color: var(--text-primary); font-weight: 600; }
+
+.token-renew {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--glass-border);
+  margin-top: 0.25rem;
+}
+
+.token-instructions {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.token-instructions code {
+  background: rgba(255,255,255,0.08);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.oauth-input-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.oauth-input-row input {
+  flex: 1;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.oauth-input-row input:focus { border-color: var(--accent-color); }
+
+.oauth-msg {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}

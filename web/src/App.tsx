@@ -143,6 +143,9 @@ function App() {
     const [adminUsers, setAdminUsers] = useState<any[]>([]);
     const [adminTokens, setAdminTokens] = useState<any[]>([]);
     const [adminLoading, setAdminLoading] = useState(false);
+    const [tokenStatus, setTokenStatus] = useState<{ hasRefreshToken: boolean; expiresAt: string | null } | null>(null);
+    const [oauthCode, setOauthCode] = useState('');
+    const [oauthMsg, setOauthMsg] = useState('');
 
     useEffect(() => {
         const token = localStorage.getItem('kommo_token');
@@ -203,17 +206,42 @@ function App() {
     const loadAdminPanel = async () => {
         setAdminLoading(true);
         try {
-            const [usersRes, tokensRes] = await Promise.all([
+            const [usersRes, tokensRes, statusRes] = await Promise.all([
                 axios.get('/api/admin/users', { headers: { Authorization: `Bearer ${authToken}` } }),
                 axios.get('/api/admin/tokens', { headers: { Authorization: `Bearer ${authToken}` } }),
+                axios.get('/api/oauth/status', { headers: { Authorization: `Bearer ${authToken}` } }),
             ]);
             setAdminUsers(usersRes.data);
             setAdminTokens(tokensRes.data);
+            setTokenStatus(statusRes.data);
         } catch (e) {
             console.error("Admin load error", e);
         } finally {
             setAdminLoading(false);
         }
+    };
+
+    const handleOauthExchange = async () => {
+        if (!oauthCode.trim()) return;
+        setOauthMsg('');
+        try {
+            const res = await axios.post('/api/oauth/exchange',
+                { code: oauthCode.trim() },
+                { headers: { Authorization: `Bearer ${authToken}` } }
+            );
+            setOauthMsg('✅ ' + res.data.message);
+            setOauthCode('');
+            // Refresh status
+            const statusRes = await axios.get('/api/oauth/status', { headers: { Authorization: `Bearer ${authToken}` } });
+            setTokenStatus(statusRes.data);
+        } catch (err: any) {
+            setOauthMsg('❌ ' + (err.response?.data?.error || 'Erro ao trocar o código.'));
+        }
+    };
+
+    const openKommoAuth = async () => {
+        const res = await axios.get('/api/oauth/start', { headers: { Authorization: `Bearer ${authToken}` } });
+        window.open(res.data.authUrl, '_blank');
     };
 
     const handleApprove = async (userId: string) => {
@@ -345,7 +373,44 @@ function App() {
                     </div>
 
                     <div className="admin-section">
-                        <h2>Uso de Tokens (30 dias)</h2>
+                        <h2>Token Kommo</h2>
+                        <div className="token-status-card glass">
+                            <div className="token-info">
+                                <span className="token-label">Expira em:</span>
+                                <span className="token-value">{tokenStatus?.expiresAt ?? '—'}</span>
+                            </div>
+                            <div className="token-info">
+                                <span className="token-label">Refresh token:</span>
+                                <span className={`status-badge ${tokenStatus?.hasRefreshToken ? 'approved' : 'denied'}`}>
+                                    {tokenStatus?.hasRefreshToken ? 'configurado' : 'não configurado'}
+                                </span>
+                            </div>
+                            <div className="token-renew">
+                                <p className="token-instructions">
+                                    Para renovar: clique em <strong>Autorizar Kommo</strong>, aprove o acesso,
+                                    copie o parâmetro <code>code</code> da URL de redirecionamento e cole abaixo.
+                                </p>
+                                <button className="action-btn approve" style={{ padding: '6px 16px' }} onClick={openKommoAuth}>
+                                    Autorizar Kommo ↗
+                                </button>
+                                <div className="oauth-input-row">
+                                    <input
+                                        type="text"
+                                        placeholder="Cole o código aqui (parâmetro code=...)"
+                                        value={oauthCode}
+                                        onChange={e => setOauthCode(e.target.value)}
+                                    />
+                                    <button className="action-btn approve" onClick={handleOauthExchange} disabled={!oauthCode.trim()}>
+                                        Confirmar
+                                    </button>
+                                </div>
+                                {oauthMsg && <p className="oauth-msg">{oauthMsg}</p>}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="admin-section">
+                        <h2>Uso de Tokens Gemini (30 dias)</h2>
                         {adminTokens.length === 0 && !adminLoading && <p className="empty-text">Sem dados de uso ainda.</p>}
                         {adminTokens.length > 0 && (
                             <div className="table-card glass">
