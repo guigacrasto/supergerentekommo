@@ -19,6 +19,7 @@ import {
 interface Pipeline {
     id: number;
     name: string;
+    team: 'azul' | 'amarela';
 }
 
 interface Message {
@@ -143,9 +144,10 @@ function App() {
     const [adminUsers, setAdminUsers] = useState<any[]>([]);
     const [adminTokens, setAdminTokens] = useState<any[]>([]);
     const [adminLoading, setAdminLoading] = useState(false);
-    const [tokenStatus, setTokenStatus] = useState<{ hasRefreshToken: boolean; expiresAt: string | null } | null>(null);
-    const [oauthCode, setOauthCode] = useState('');
-    const [oauthMsg, setOauthMsg] = useState('');
+    const [tokenStatus, setTokenStatus] = useState<Record<'azul' | 'amarela', { hasRefreshToken: boolean; expiresAt: string | null }> | null>(null);
+    const [oauthCode, setOauthCode] = useState<Record<'azul' | 'amarela', string>>({ azul: '', amarela: '' });
+    const [oauthMsg, setOauthMsg] = useState<Record<'azul' | 'amarela', string>>({ azul: '', amarela: '' });
+    const [approveTeams, setApproveTeams] = useState<Record<string, { azul: boolean; amarela: boolean }>>({});
 
     useEffect(() => {
         const token = localStorage.getItem('kommo_token');
@@ -221,31 +223,33 @@ function App() {
         }
     };
 
-    const handleOauthExchange = async () => {
-        if (!oauthCode.trim()) return;
-        setOauthMsg('');
+    const handleOauthExchange = async (team: 'azul' | 'amarela') => {
+        const code = oauthCode[team];
+        if (!code.trim()) return;
+        setOauthMsg(prev => ({ ...prev, [team]: '' }));
         try {
-            const res = await axios.post('/api/oauth/exchange',
-                { code: oauthCode.trim() },
+            const res = await axios.post(`/api/oauth/exchange?team=${team}`,
+                { code: code.trim() },
                 { headers: { Authorization: `Bearer ${authToken}` } }
             );
-            setOauthMsg('✅ ' + res.data.message);
-            setOauthCode('');
-            // Refresh status
+            setOauthMsg(prev => ({ ...prev, [team]: '✅ ' + res.data.message }));
+            setOauthCode(prev => ({ ...prev, [team]: '' }));
             const statusRes = await axios.get('/api/oauth/status', { headers: { Authorization: `Bearer ${authToken}` } });
             setTokenStatus(statusRes.data);
         } catch (err: any) {
-            setOauthMsg('❌ ' + (err.response?.data?.error || 'Erro ao trocar o código.'));
+            setOauthMsg(prev => ({ ...prev, [team]: '❌ ' + (err.response?.data?.error || 'Erro ao trocar o código.') }));
         }
     };
 
-    const openKommoAuth = async () => {
-        const res = await axios.get('/api/oauth/start', { headers: { Authorization: `Bearer ${authToken}` } });
+    const openKommoAuth = async (team: 'azul' | 'amarela') => {
+        const res = await axios.get(`/api/oauth/start?team=${team}`, { headers: { Authorization: `Bearer ${authToken}` } });
         window.open(res.data.authUrl, '_blank');
     };
 
     const handleApprove = async (userId: string) => {
-        await axios.post(`/api/admin/users/${userId}/approve`, {}, {
+        const sel = approveTeams[userId] || { azul: true, amarela: false };
+        const teams = (['azul', 'amarela'] as const).filter(t => sel[t]);
+        await axios.post(`/api/admin/users/${userId}/approve`, { teams }, {
             headers: { Authorization: `Bearer ${authToken}` }
         });
         loadAdminPanel();
@@ -357,7 +361,21 @@ function App() {
                                                     </td>
                                                     <td>
                                                         {u.status !== 'approved' && (
-                                                            <button className="action-btn approve" onClick={() => handleApprove(u.id)}>Aprovar</button>
+                                                            <>
+                                                                <label style={{ fontSize: '0.75rem', marginRight: '6px' }}>
+                                                                    <input type="checkbox"
+                                                                        checked={approveTeams[u.id]?.azul ?? true}
+                                                                        onChange={e => setApproveTeams(prev => ({ ...prev, [u.id]: { ...(prev[u.id] || { azul: true, amarela: false }), azul: e.target.checked } }))}
+                                                                    /> Azul
+                                                                </label>
+                                                                <label style={{ fontSize: '0.75rem', marginRight: '6px' }}>
+                                                                    <input type="checkbox"
+                                                                        checked={approveTeams[u.id]?.amarela ?? false}
+                                                                        onChange={e => setApproveTeams(prev => ({ ...prev, [u.id]: { ...(prev[u.id] || { azul: true, amarela: false }), amarela: e.target.checked } }))}
+                                                                    /> Amarela
+                                                                </label>
+                                                                <button className="action-btn approve" onClick={() => handleApprove(u.id)}>Aprovar</button>
+                                                            </>
                                                         )}
                                                         {u.status !== 'denied' && (
                                                             <button className="action-btn deny" onClick={() => handleDeny(u.id)}>Negar</button>
@@ -374,39 +392,46 @@ function App() {
 
                     <div className="admin-section">
                         <h2>Token Kommo</h2>
-                        <div className="token-status-card glass">
-                            <div className="token-info">
-                                <span className="token-label">Expira em:</span>
-                                <span className="token-value">{tokenStatus?.expiresAt ?? '—'}</span>
-                            </div>
-                            <div className="token-info">
-                                <span className="token-label">Refresh token:</span>
-                                <span className={`status-badge ${tokenStatus?.hasRefreshToken ? 'approved' : 'denied'}`}>
-                                    {tokenStatus?.hasRefreshToken ? 'configurado' : 'não configurado'}
-                                </span>
-                            </div>
-                            <div className="token-renew">
-                                <p className="token-instructions">
-                                    Para renovar: clique em <strong>Autorizar Kommo</strong>, aprove o acesso,
-                                    copie o parâmetro <code>code</code> da URL de redirecionamento e cole abaixo.
+                        {(['azul', 'amarela'] as const).map(team => (
+                            <div key={team} style={{ marginBottom: '1rem' }}>
+                                <p style={{ fontSize: '0.8rem', fontWeight: 700, color: team === 'azul' ? '#3b82f6' : '#f59e0b', marginBottom: '0.5rem' }}>
+                                    {team === 'azul' ? 'Equipe Azul' : 'Equipe Amarela'}
                                 </p>
-                                <button className="action-btn approve" style={{ padding: '6px 16px' }} onClick={openKommoAuth}>
-                                    Autorizar Kommo ↗
-                                </button>
-                                <div className="oauth-input-row">
-                                    <input
-                                        type="text"
-                                        placeholder="Cole o código aqui (parâmetro code=...)"
-                                        value={oauthCode}
-                                        onChange={e => setOauthCode(e.target.value)}
-                                    />
-                                    <button className="action-btn approve" onClick={handleOauthExchange} disabled={!oauthCode.trim()}>
-                                        Confirmar
-                                    </button>
+                                <div className="token-status-card glass">
+                                    <div className="token-info">
+                                        <span className="token-label">Expira em:</span>
+                                        <span className="token-value">{tokenStatus?.[team]?.expiresAt ?? '—'}</span>
+                                    </div>
+                                    <div className="token-info">
+                                        <span className="token-label">Refresh token:</span>
+                                        <span className={`status-badge ${tokenStatus?.[team]?.hasRefreshToken ? 'approved' : 'denied'}`}>
+                                            {tokenStatus?.[team]?.hasRefreshToken ? 'configurado' : 'não configurado'}
+                                        </span>
+                                    </div>
+                                    <div className="token-renew">
+                                        <p className="token-instructions">
+                                            Para renovar: clique em <strong>Autorizar Kommo</strong>, aprove o acesso,
+                                            copie o parâmetro <code>code</code> da URL e cole abaixo.
+                                        </p>
+                                        <button className="action-btn approve" style={{ padding: '6px 16px' }} onClick={() => openKommoAuth(team)}>
+                                            Autorizar Kommo ↗
+                                        </button>
+                                        <div className="oauth-input-row">
+                                            <input
+                                                type="text"
+                                                placeholder="Cole o código aqui (parâmetro code=...)"
+                                                value={oauthCode[team]}
+                                                onChange={e => setOauthCode(prev => ({ ...prev, [team]: e.target.value }))}
+                                            />
+                                            <button className="action-btn approve" onClick={() => handleOauthExchange(team)} disabled={!oauthCode[team].trim()}>
+                                                Confirmar
+                                            </button>
+                                        </div>
+                                        {oauthMsg[team] && <p className="oauth-msg">{oauthMsg[team]}</p>}
+                                    </div>
                                 </div>
-                                {oauthMsg && <p className="oauth-msg">{oauthMsg}</p>}
                             </div>
-                        </div>
+                        ))}
                     </div>
 
                     <div className="admin-section">
@@ -628,18 +653,25 @@ function App() {
                         </button>
                     </div>
 
-                    <div className="group">
-                        <label>Marcas</label>
-                        {pipelines.map(p => (
-                            <button
-                                key={p.id}
-                                className={activeTab === `brand-${p.id}` && page !== 'admin' ? 'active' : ''}
-                                onClick={() => { setPage('app'); loadTabData(`brand-${p.id}`); }}
-                            >
-                                <ChevronRight size={14} /> {p.name.replace('FUNIL ', '').substring(0, 15)}
-                            </button>
-                        ))}
-                    </div>
+                    {(['azul', 'amarela'] as const)
+                        .filter(team => pipelines.some(p => p.team === team))
+                        .map(team => (
+                            <div className="group" key={team}>
+                                <label className={`team-label ${team}`}>
+                                    {team === 'azul' ? 'Equipe Azul' : 'Equipe Amarela'}
+                                </label>
+                                {pipelines.filter(p => p.team === team).map(p => (
+                                    <button
+                                        key={p.id}
+                                        className={activeTab === `brand-${p.id}` && page !== 'admin' ? 'active' : ''}
+                                        onClick={() => { setPage('app'); loadTabData(`brand-${p.id}`); }}
+                                    >
+                                        <ChevronRight size={14} /> {p.name.replace('FUNIL ', '').substring(0, 15)}
+                                    </button>
+                                ))}
+                            </div>
+                        ))
+                    }
                 </nav>
 
                 <div className="user-section">
