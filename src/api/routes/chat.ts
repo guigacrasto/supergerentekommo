@@ -3,6 +3,8 @@ import { randomUUID } from "crypto";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { KommoService } from "../../services/kommo.js";
 import { getCrmMetrics, CrmMetrics } from "../cache/crm-cache.js";
+import { requireAuth, AuthRequest } from "../middleware/requireAuth.js";
+import { supabase } from "../supabase.js";
 
 interface ChatSession {
   history: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }>;
@@ -57,10 +59,11 @@ ${vendedoresTexto}
 
 export function chatRouter(service: KommoService) {
   const router = Router();
+  router.use(requireAuth as any);
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
-  router.post("/", async (req, res) => {
+  router.post("/", async (req: AuthRequest, res) => {
     const { message, sessionId: incomingSessionId } = req.body;
 
     if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === "SUA_CHAVE_AQUI") {
@@ -93,6 +96,20 @@ export function chatRouter(service: KommoService) {
 
       const result = await chat.sendMessage(message);
       const responseText = result.response.text();
+
+        // Log token usage
+        const usage = result.response.usageMetadata;
+        if (usage && req.userId) {
+          await supabase.from("token_logs").insert({
+            user_id: req.userId,
+            session_id: sessionId,
+            prompt_tokens: usage.promptTokenCount ?? 0,
+            completion_tokens: usage.candidatesTokenCount ?? 0,
+            total_tokens: usage.totalTokenCount ?? 0,
+          }).then(({ error }) => {
+            if (error) console.error("[TokenLog] Erro ao salvar tokens:", error.message);
+          });
+        }
 
       session.history.push(
         { role: "user", parts: [{ text: message }] },

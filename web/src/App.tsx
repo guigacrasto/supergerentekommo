@@ -27,7 +27,107 @@ interface Message {
     data?: any;
 }
 
+function LoginPage({ onLogin, onGoRegister }: { onLogin: (email: string, password: string) => Promise<void>; onGoRegister: () => void }) {
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        setError('');
+        const form = e.currentTarget;
+        const email = (form.elements.namedItem('email') as HTMLInputElement).value;
+        const password = (form.elements.namedItem('password') as HTMLInputElement).value;
+        setLoading(true);
+        try {
+            await onLogin(email, password);
+        } catch (err: any) {
+            setError(err.response?.data?.error || 'Erro ao fazer login.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="auth-page">
+            <div className="auth-card glass">
+                <div className="brand">
+                    <div className="logo">KG</div>
+                    <span>Kommo Agent</span>
+                </div>
+                <h2>Entrar</h2>
+                {error && <div className="auth-error">{error}</div>}
+                <form onSubmit={handleSubmit}>
+                    <input name="email" type="email" placeholder="Email" required />
+                    <input name="password" type="password" placeholder="Senha" required />
+                    <button type="submit" disabled={loading}>{loading ? 'Entrando...' : 'Entrar'}</button>
+                </form>
+                <p>Não tem conta? <button type="button" onClick={onGoRegister}>Cadastrar</button></p>
+            </div>
+        </div>
+    );
+}
+
+function RegisterPage({ onRegister, onGoLogin }: { onRegister: (name: string, email: string, password: string) => Promise<void>; onGoLogin: () => void }) {
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState(false);
+
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        setError('');
+        const form = e.currentTarget;
+        const name = (form.elements.namedItem('name') as HTMLInputElement).value;
+        const email = (form.elements.namedItem('email') as HTMLInputElement).value;
+        const password = (form.elements.namedItem('password') as HTMLInputElement).value;
+        setLoading(true);
+        try {
+            await onRegister(name, email, password);
+            setSuccess(true);
+        } catch (err: any) {
+            setError(err.response?.data?.error || 'Erro ao cadastrar.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (success) {
+        return (
+            <div className="auth-page">
+                <div className="auth-card glass">
+                    <div className="brand"><div className="logo">KG</div><span>Kommo Agent</span></div>
+                    <h2>Cadastro realizado!</h2>
+                    <p style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
+                        Aguarde a aprovação do administrador para acessar o sistema.
+                    </p>
+                    <button type="button" className="back-to-login" onClick={onGoLogin}>Voltar ao login</button>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="auth-page">
+            <div className="auth-card glass">
+                <div className="brand"><div className="logo">KG</div><span>Kommo Agent</span></div>
+                <h2>Criar conta</h2>
+                {error && <div className="auth-error">{error}</div>}
+                <form onSubmit={handleSubmit}>
+                    <input name="name" type="text" placeholder="Seu nome" required />
+                    <input name="email" type="email" placeholder="Email" required />
+                    <input name="password" type="password" placeholder="Senha (mín. 6 caracteres)" required minLength={6} />
+                    <button type="submit" disabled={loading}>{loading ? 'Cadastrando...' : 'Criar conta'}</button>
+                </form>
+                <p>Já tem conta? <button type="button" onClick={onGoLogin}>Entrar</button></p>
+            </div>
+        </div>
+    );
+}
+
 function App() {
+    const [page, setPage] = useState<'login' | 'register' | 'app' | 'admin'>('login');
+    const [authToken, setAuthToken] = useState<string | null>(null);
+    const [currentUser, setCurrentUser] = useState<{ id: string; name: string; email: string; role: string } | null>(null);
+
     const [activeTab, setActiveTab] = useState('chat');
     const [messages, setMessages] = useState<Message[]>([
         { role: 'assistant', content: 'Olá! Sou o assistente do Kommo. Posso buscar dados reais dos funis Tryvion, Matriz ou Axion. O que deseja saber hoje?' }
@@ -40,19 +140,94 @@ function App() {
     const [toDate, setToDate] = useState(new Date().toISOString().split('T')[0]);
     const [sessionId, setSessionId] = useState<string | null>(null);
 
+    const [adminUsers, setAdminUsers] = useState<any[]>([]);
+    const [adminTokens, setAdminTokens] = useState<any[]>([]);
+    const [adminLoading, setAdminLoading] = useState(false);
+
     useEffect(() => {
-        fetchPipelines();
+        const token = localStorage.getItem('kommo_token');
+        const userStr = localStorage.getItem('kommo_user');
+        if (token && userStr) {
+            const user = JSON.parse(userStr);
+            setAuthToken(token);
+            setCurrentUser(user);
+            setPage('app');
+            fetchPipelines(token);
+        }
     }, []);
 
-    const fetchPipelines = async () => {
+    const fetchPipelines = async (token?: string | null) => {
+        const t = token ?? authToken;
+        if (!t) return;
         try {
             console.log("App: fetching pipelines...");
-            const res = await axios.get('/api/pipelines');
+            const res = await axios.get('/api/pipelines', {
+                headers: { Authorization: `Bearer ${t}` }
+            });
             console.log("App: pipelines received:", res.data);
             setPipelines(res.data);
         } catch (e) {
             console.error("App: error fetching pipelines", e);
         }
+    };
+
+    const handleLogin = async (email: string, password: string) => {
+        const res = await axios.post('/api/auth/login', { email, password });
+        const { token, user } = res.data;
+        localStorage.setItem('kommo_token', token);
+        localStorage.setItem('kommo_user', JSON.stringify(user));
+        setAuthToken(token);
+        setCurrentUser(user);
+        setPage('app');
+        fetchPipelines(token);
+    };
+
+    const handleRegister = async (name: string, email: string, password: string) => {
+        await axios.post('/api/auth/register', { name, email, password });
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem('kommo_token');
+        localStorage.removeItem('kommo_user');
+        setAuthToken(null);
+        setCurrentUser(null);
+        setPage('login');
+        setPipelines([]);
+        setSessionId(null);
+        setMessages([{ role: 'assistant', content: 'Olá! Sou o assistente do Kommo. Posso buscar dados reais dos funis Tryvion, Matriz ou Axion. O que deseja saber hoje?' }]);
+        setTabData(null);
+        setAdminUsers([]);
+        setAdminTokens([]);
+    };
+
+    const loadAdminPanel = async () => {
+        setAdminLoading(true);
+        try {
+            const [usersRes, tokensRes] = await Promise.all([
+                axios.get('/api/admin/users', { headers: { Authorization: `Bearer ${authToken}` } }),
+                axios.get('/api/admin/tokens', { headers: { Authorization: `Bearer ${authToken}` } }),
+            ]);
+            setAdminUsers(usersRes.data);
+            setAdminTokens(tokensRes.data);
+        } catch (e) {
+            console.error("Admin load error", e);
+        } finally {
+            setAdminLoading(false);
+        }
+    };
+
+    const handleApprove = async (userId: string) => {
+        await axios.post(`/api/admin/users/${userId}/approve`, {}, {
+            headers: { Authorization: `Bearer ${authToken}` }
+        });
+        loadAdminPanel();
+    };
+
+    const handleDeny = async (userId: string) => {
+        await axios.post(`/api/admin/users/${userId}/deny`, {}, {
+            headers: { Authorization: `Bearer ${authToken}` }
+        });
+        loadAdminPanel();
     };
 
     const handleSend = async (e: React.FormEvent) => {
@@ -65,7 +240,9 @@ function App() {
         setLoading(true);
 
         try {
-            const res = await axios.post('/api/chat', { message: userMsg, sessionId });
+            const res = await axios.post('/api/chat', { message: userMsg, sessionId }, {
+                headers: { Authorization: `Bearer ${authToken}` }
+            });
             setSessionId(res.data.sessionId);
             setMessages(prev => [...prev, {
                 role: 'assistant',
@@ -88,7 +265,9 @@ function App() {
             let res;
             if (tab === 'agents') {
                 console.log("App: loading agent report...");
-                res = await axios.get('/api/reports/agents');
+                res = await axios.get('/api/reports/agents', {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
                 setTabData(res.data);
             } else if (tab.startsWith('brand-')) {
                 const pid = tab.replace('brand-', '');
@@ -103,7 +282,7 @@ function App() {
                     params.to = Math.floor(endTs.getTime() / 1000);
                 }
 
-                res = await axios.get(`/api/leads/new/${pid}`, { params });
+                res = await axios.get(`/api/leads/new/${pid}`, { params, headers: { Authorization: `Bearer ${authToken}` } });
                 console.log(`App: brand report data for ${pid}:`, res.data);
                 setTabData(res.data);
             }
@@ -115,6 +294,94 @@ function App() {
     };
 
     const renderContent = () => {
+        if (page === 'admin') {
+            return (
+                <div className="admin-panel">
+                    <div className="admin-header">
+                        <h1>Painel Admin</h1>
+                        <button className="refresh-btn" onClick={loadAdminPanel} disabled={adminLoading}>
+                            <RefreshCw size={16} className={adminLoading ? 'spin' : ''} /> Atualizar
+                        </button>
+                    </div>
+
+                    <div className="admin-section">
+                        <h2>Usuários</h2>
+                        {adminUsers.length === 0 && !adminLoading && <p className="empty-text">Nenhum usuário cadastrado.</p>}
+                        {adminUsers.length > 0 && (
+                            <div className="table-card glass">
+                                <div className="table-responsive">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>Nome</th>
+                                                <th>Email</th>
+                                                <th>Status</th>
+                                                <th>Ações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {adminUsers.map((u) => (
+                                                <tr key={u.id}>
+                                                    <td>{u.name}</td>
+                                                    <td>{u.email}</td>
+                                                    <td>
+                                                        <span className={`status-badge ${u.status}`}>{u.status}</span>
+                                                    </td>
+                                                    <td>
+                                                        {u.status !== 'approved' && (
+                                                            <button className="action-btn approve" onClick={() => handleApprove(u.id)}>Aprovar</button>
+                                                        )}
+                                                        {u.status !== 'denied' && (
+                                                            <button className="action-btn deny" onClick={() => handleDeny(u.id)}>Negar</button>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="admin-section">
+                        <h2>Uso de Tokens (30 dias)</h2>
+                        {adminTokens.length === 0 && !adminLoading && <p className="empty-text">Sem dados de uso ainda.</p>}
+                        {adminTokens.length > 0 && (
+                            <div className="table-card glass">
+                                <div className="table-responsive">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>Usuário</th>
+                                                <th>Mensagens</th>
+                                                <th>Tokens Entrada</th>
+                                                <th>Tokens Saída</th>
+                                                <th>Total Tokens</th>
+                                                <th>Custo Est.</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {adminTokens.map((u) => (
+                                                <tr key={u.userId}>
+                                                    <td><div>{u.name}</div><div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{u.email}</div></td>
+                                                    <td>{u.messages}</td>
+                                                    <td>{u.promptTokens.toLocaleString()}</td>
+                                                    <td>{u.completionTokens.toLocaleString()}</td>
+                                                    <td className="highlight-cell">{u.totalTokens.toLocaleString()}</td>
+                                                    <td>{u.estimatedCostUSD}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
         if (activeTab === 'chat') {
             return (
                 <div className="chat-container">
@@ -253,6 +520,24 @@ function App() {
         );
     };
 
+    if (page === 'login') {
+        return (
+            <LoginPage
+                onLogin={handleLogin}
+                onGoRegister={() => setPage('register')}
+            />
+        );
+    }
+
+    if (page === 'register') {
+        return (
+            <RegisterPage
+                onRegister={handleRegister}
+                onGoLogin={() => setPage('login')}
+            />
+        );
+    }
+
     return (
         <div className="app-layout">
             <aside className="sidebar glass">
@@ -265,14 +550,14 @@ function App() {
                     <div className="group">
                         <label>Principal</label>
                         <button
-                            className={activeTab === 'chat' ? 'active' : ''}
-                            onClick={() => setActiveTab('chat')}
+                            className={activeTab === 'chat' && page !== 'admin' ? 'active' : ''}
+                            onClick={() => { setPage('app'); setActiveTab('chat'); }}
                         >
                             <MessageSquare size={18} /> Chat Atual
                         </button>
                         <button
-                            className={activeTab === 'agents' ? 'active' : ''}
-                            onClick={() => loadTabData('agents')}
+                            className={activeTab === 'agents' && page !== 'admin' ? 'active' : ''}
+                            onClick={() => { setPage('app'); loadTabData('agents'); }}
                         >
                             <BarChart3 size={18} /> Relatório Agentes
                         </button>
@@ -283,8 +568,8 @@ function App() {
                         {pipelines.map(p => (
                             <button
                                 key={p.id}
-                                className={activeTab === `brand-${p.id}` ? 'active' : ''}
-                                onClick={() => loadTabData(`brand-${p.id}`)}
+                                className={activeTab === `brand-${p.id}` && page !== 'admin' ? 'active' : ''}
+                                onClick={() => { setPage('app'); loadTabData(`brand-${p.id}`); }}
                             >
                                 <ChevronRight size={14} /> {p.name.replace('FUNIL ', '').substring(0, 15)}
                             </button>
@@ -293,8 +578,30 @@ function App() {
                 </nav>
 
                 <div className="user-section">
-                    <button className="settings-btn"><Settings size={18} /></button>
-                    <button className="logout-btn"><LogOut size={18} /></button>
+                    {currentUser && (
+                        <div className="user-info">
+                            <span className="user-name">{currentUser.name}</span>
+                            <span className="user-role">{currentUser.role}</span>
+                        </div>
+                    )}
+                    <div className="user-actions">
+                        {currentUser?.role === 'admin' && (
+                            <button
+                                className={page === 'admin' ? 'active' : ''}
+                                onClick={() => { setPage('admin'); loadAdminPanel(); }}
+                            >
+                                <Settings size={18} /> Admin
+                            </button>
+                        )}
+                        {page === 'admin' && (
+                            <button onClick={() => setPage('app')}>
+                                <MessageSquare size={18} /> Voltar
+                            </button>
+                        )}
+                        <button className="logout-btn" onClick={handleLogout}>
+                            <LogOut size={18} /> Sair
+                        </button>
+                    </div>
                 </div>
             </aside>
 
