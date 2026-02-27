@@ -38,7 +38,7 @@ export function leadsRouter(services: Record<TeamKey, KommoService>) {
       let pipe: any = null;
 
       for (const team of userTeams) {
-        if (!TEAMS[team].subdomain) continue;
+        if (!TEAMS[team].subdomain || !services[team]) continue;
         const pipelines = await services[team].getPipelines();
         const found = pipelines.find((p: any) => p.id === parseInt(pipelineId as string));
         if (found) {
