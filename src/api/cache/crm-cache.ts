@@ -1,9 +1,10 @@
 import { KommoService } from "../../services/kommo.js";
-import { PIPELINE_IDS, STATUS } from "../../config.js";
+import { TeamKey, TEAMS } from "../../config.js";
 
 export interface VendedorMetrics {
   nome: string;
   funil: string;
+  team: TeamKey;
   total: number;
   ganhos: number;
   perdidos: number;
@@ -15,6 +16,7 @@ export interface VendedorMetrics {
 
 export interface FunilMetrics {
   nome: string;
+  team: TeamKey;
   total: number;
   ganhos: number;
   perdidos: number;
@@ -40,11 +42,20 @@ export interface CrmMetrics {
   atualizadoEm: string;
 }
 
-const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutos
+const CACHE_TTL_MS = 30 * 60 * 1000;
 
-let cachedMetrics: CrmMetrics | null = null;
-let cacheExpiresAt = 0;
-let fetchPromise: Promise<CrmMetrics> | null = null;
+const STATUS = { WON: 142, LOST: 143 };
+
+interface CacheEntry {
+  metrics: CrmMetrics | null;
+  expiresAt: number;
+  fetchPromise: Promise<CrmMetrics> | null;
+}
+
+const caches: Record<TeamKey, CacheEntry> = {
+  azul: { metrics: null, expiresAt: 0, fetchPromise: null },
+  amarela: { metrics: null, expiresAt: 0, fetchPromise: null },
+};
 
 function toConversao(ganhos: number, perdidos: number): string {
   const total = ganhos + perdidos;
@@ -57,23 +68,38 @@ function countPeriod(leads: any[], days: number): number {
   return leads.filter((l) => l.created_at >= cutoff).length;
 }
 
-async function fetchAndCompute(service: KommoService): Promise<CrmMetrics> {
-  console.log("[CrmCache] Buscando dados do CRM...");
+async function fetchAndCompute(team: TeamKey, service: KommoService): Promise<CrmMetrics> {
+  console.log(`[CrmCache:${team}] Buscando dados do CRM...`);
 
-  const [users, tryvionLeads, matrizLeads, axionLeads] = await Promise.all([
+  const excludeNames = TEAMS[team].excludePipelineNames;
+
+  // Fetch all pipelines dynamically
+  const allPipelines = await service.getPipelines();
+  const pipelines = allPipelines.filter(
+    (p: any) => !excludeNames.some((ex) => p.name.toUpperCase().includes(ex.toUpperCase()))
+  );
+
+  if (pipelines.length === 0) {
+    console.warn(`[CrmCache:${team}] Nenhum pipeline encontrado após filtro`);
+    return {
+      funis: {},
+      vendedores: [],
+      geral: { total: 0, ganhos: 0, perdidos: 0, ativos: 0, conversao: "0.0%", novosHoje: 0, novosSemana: 0, novosMes: 0 },
+      atualizadoEm: new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }),
+    };
+  }
+
+  const [users, ...leadsPerPipeline] = await Promise.all([
     service.getUsers(),
-    service.getLeads({ filter: { pipeline_id: PIPELINE_IDS.TRYVION } }),
-    service.getLeads({ filter: { pipeline_id: PIPELINE_IDS.MATRIZ } }),
-    service.getLeads({ filter: { pipeline_id: PIPELINE_IDS.AXION } }),
+    ...pipelines.map((p: any) => service.getLeads({ filter: { pipeline_id: p.id } })),
   ]);
 
-  const leadsPerFunil: Record<string, { nome: string; leads: any[] }> = {
-    TRYVION: { nome: "FUNIL TRYVION", leads: tryvionLeads },
-    MATRIZ: { nome: "FUNIL NEW MATRIZ", leads: matrizLeads },
-    AXION: { nome: "FUNIL AXION", leads: axionLeads },
-  };
+  const leadsPerFunil: Record<string, { nome: string; leads: any[] }> = {};
+  pipelines.forEach((p: any, i: number) => {
+    leadsPerFunil[String(p.id)] = { nome: p.name, leads: leadsPerPipeline[i] };
+  });
 
-  const allLeads = [...tryvionLeads, ...matrizLeads, ...axionLeads];
+  const allLeads = leadsPerPipeline.flat();
 
   // Métricas por funil
   const funis: Record<string, FunilMetrics> = {};
@@ -83,6 +109,7 @@ async function fetchAndCompute(service: KommoService): Promise<CrmMetrics> {
     const ativos = leads.length - ganhos - perdidos;
     funis[key] = {
       nome,
+      team,
       total: leads.length,
       ganhos,
       perdidos,
@@ -96,7 +123,7 @@ async function fetchAndCompute(service: KommoService): Promise<CrmMetrics> {
   // Métricas por vendedor × funil
   const vendedores: VendedorMetrics[] = [];
   for (const user of users) {
-    for (const [key, { nome, leads }] of Object.entries(leadsPerFunil)) {
+    for (const [, { nome, leads }] of Object.entries(leadsPerFunil)) {
       const mine = leads.filter((l) => l.responsible_user_id === user.id);
       if (mine.length === 0) continue;
       const ganhos = mine.filter((l) => l.status_id === STATUS.WON).length;
@@ -104,6 +131,7 @@ async function fetchAndCompute(service: KommoService): Promise<CrmMetrics> {
       vendedores.push({
         nome: user.name,
         funil: nome,
+        team,
         total: mine.length,
         ganhos,
         perdidos,
@@ -115,7 +143,6 @@ async function fetchAndCompute(service: KommoService): Promise<CrmMetrics> {
     }
   }
 
-  // Resumo geral
   const totalGanhos = allLeads.filter((l) => l.status_id === STATUS.WON).length;
   const totalPerdidos = allLeads.filter((l) => l.status_id === STATUS.LOST).length;
 
@@ -130,9 +157,7 @@ async function fetchAndCompute(service: KommoService): Promise<CrmMetrics> {
     novosMes: countPeriod(allLeads, 30),
   };
 
-  console.log(
-    `[CrmCache] Pronto — ${allLeads.length} leads, ${vendedores.length} entradas de vendedor`
-  );
+  console.log(`[CrmCache:${team}] Pronto — ${allLeads.length} leads, ${vendedores.length} entradas de vendedor`);
 
   return {
     funis,
@@ -142,44 +167,40 @@ async function fetchAndCompute(service: KommoService): Promise<CrmMetrics> {
   };
 }
 
-export async function getCrmMetrics(service: KommoService): Promise<CrmMetrics> {
+export async function getCrmMetrics(team: TeamKey, service: KommoService): Promise<CrmMetrics> {
+  const entry = caches[team];
   const now = Date.now();
 
-  // Cache fresco — retorna imediatamente
-  if (cachedMetrics && now < cacheExpiresAt) {
-    return cachedMetrics;
-  }
+  if (entry.metrics && now < entry.expiresAt) return entry.metrics;
 
-  // Cache expirado mas existe — retorna stale e revalida em background
-  if (cachedMetrics && !fetchPromise) {
-    fetchPromise = fetchAndCompute(service)
+  if (entry.metrics && !entry.fetchPromise) {
+    entry.fetchPromise = fetchAndCompute(team, service)
       .then((metrics) => {
-        cachedMetrics = metrics;
-        cacheExpiresAt = Date.now() + CACHE_TTL_MS;
+        entry.metrics = metrics;
+        entry.expiresAt = Date.now() + CACHE_TTL_MS;
         return metrics;
       })
       .catch((err) => {
-        console.error("[CrmCache] Erro no refresh:", err);
-        return cachedMetrics!;
+        console.error(`[CrmCache:${team}] Erro no refresh:`, err);
+        return entry.metrics!;
       })
-      .finally(() => { fetchPromise = null; });
-    return cachedMetrics;
+      .finally(() => { entry.fetchPromise = null; });
+    return entry.metrics;
   }
 
-  // Sem cache — compartilha a Promise entre chamadas concorrentes
-  if (!fetchPromise) {
-    fetchPromise = fetchAndCompute(service)
+  if (!entry.fetchPromise) {
+    entry.fetchPromise = fetchAndCompute(team, service)
       .then((metrics) => {
-        cachedMetrics = metrics;
-        cacheExpiresAt = Date.now() + CACHE_TTL_MS;
+        entry.metrics = metrics;
+        entry.expiresAt = Date.now() + CACHE_TTL_MS;
         return metrics;
       })
       .catch((err) => {
-        console.error("[CrmCache] Erro no fetch inicial:", err);
+        console.error(`[CrmCache:${team}] Erro no fetch inicial:`, err);
         throw err;
       })
-      .finally(() => { fetchPromise = null; });
+      .finally(() => { entry.fetchPromise = null; });
   }
 
-  return fetchPromise;
+  return entry.fetchPromise;
 }
