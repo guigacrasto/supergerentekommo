@@ -2,14 +2,17 @@ import axios, { AxiosInstance } from "axios";
 import { KommoConfig, Lead, Message } from "../types/index.js";
 import qs from "qs";
 import { loadTokens, saveTokens } from "./token-store.js";
+import { TeamKey } from "../config.js";
 
 export class KommoService {
     public client: AxiosInstance;
     private config: KommoConfig;
     private currentAccessToken: string;
+    private team: TeamKey;
 
-    constructor(config: KommoConfig) {
+    constructor(config: KommoConfig, team: TeamKey) {
         this.config = config;
+        this.team = team;
         this.currentAccessToken = config.accessToken ?? "";
         this.client = axios.create({
             baseURL: `https://${config.subdomain}.kommo.com/api/v4`,
@@ -22,7 +25,6 @@ export class KommoService {
             }
         });
 
-        // Auto-refresh: on 401 from Kommo, try to refresh the token and retry once
         this.client.interceptors.response.use(
             (response) => response,
             async (error) => {
@@ -34,7 +36,7 @@ export class KommoService {
                         original.headers["Authorization"] = `Bearer ${newToken}`;
                         return this.client(original);
                     } catch (refreshErr) {
-                        console.error("[KommoService] Token refresh failed:", refreshErr);
+                        console.error(`[KommoService:${this.team}] Token refresh failed:`, refreshErr);
                     }
                 }
                 return Promise.reject(error);
@@ -45,13 +47,13 @@ export class KommoService {
     /** Called once on startup: loads the latest token from Supabase if available */
     public async loadStoredToken(): Promise<void> {
         try {
-            const stored = await loadTokens();
+            const stored = await loadTokens(this.team);
             if (stored?.accessToken && stored.accessToken !== this.currentAccessToken) {
-                console.log("[KommoService] Using stored access token from Supabase");
+                console.log(`[KommoService:${this.team}] Using stored access token from Supabase`);
                 this.setAccessToken(stored.accessToken);
             }
         } catch (e) {
-            console.warn("[KommoService] Could not load stored token, using env token:", e);
+            console.warn(`[KommoService:${this.team}] Could not load stored token, using env token:`, e);
         }
     }
 
@@ -62,12 +64,12 @@ export class KommoService {
 
     /** Exchange a refresh_token for a new access_token + refresh_token */
     public async refreshAccessToken(): Promise<string> {
-        const stored = await loadTokens();
+        const stored = await loadTokens(this.team);
         if (!stored?.refreshToken) {
-            throw new Error("No refresh token available. Please re-authorize via the admin panel.");
+            throw new Error(`[${this.team}] No refresh token available. Please re-authorize via the admin panel.`);
         }
 
-        console.log("[KommoService] Refreshing access token...");
+        console.log(`[KommoService:${this.team}] Refreshing access token...`);
         const response = await axios.post(
             `https://${this.config.subdomain}.kommo.com/oauth2/access_token`,
             {
@@ -80,9 +82,9 @@ export class KommoService {
         );
 
         const { access_token, refresh_token } = response.data;
-        await saveTokens({ accessToken: access_token, refreshToken: refresh_token });
+        await saveTokens(this.team, { accessToken: access_token, refreshToken: refresh_token });
         this.setAccessToken(access_token);
-        console.log("[KommoService] Token refreshed and saved.");
+        console.log(`[KommoService:${this.team}] Token refreshed and saved.`);
         return access_token;
     }
 
@@ -100,9 +102,9 @@ export class KommoService {
         );
 
         const { access_token, refresh_token } = response.data;
-        await saveTokens({ accessToken: access_token, refreshToken: refresh_token });
+        await saveTokens(this.team, { accessToken: access_token, refreshToken: refresh_token });
         this.setAccessToken(access_token);
-        console.log("[KommoService] Authorization code exchanged, tokens saved.");
+        console.log(`[KommoService:${this.team}] Authorization code exchanged, tokens saved.`);
         return { accessToken: access_token, refreshToken: refresh_token };
     }
 
