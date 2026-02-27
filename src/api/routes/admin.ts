@@ -10,7 +10,7 @@ export function adminRouter(): Router {
   router.get("/users", async (_req, res) => {
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, name, email, status, role, created_at")
+      .select("id, name, email, status, role, teams, created_at")
       .eq("role", "user")
       .order("created_at", { ascending: false });
 
@@ -23,9 +23,15 @@ export function adminRouter(): Router {
 
   // POST /api/admin/users/:id/approve
   router.post("/users/:id/approve", async (req, res) => {
+    const { teams } = req.body; // e.g. ["azul"] or ["azul","amarela"]
+    const updateData: any = { status: "approved" };
+    if (Array.isArray(teams) && teams.length > 0) {
+      updateData.teams = teams;
+    }
+
     const { error } = await supabase
       .from("profiles")
-      .update({ status: "approved" })
+      .update(updateData)
       .eq("id", req.params.id);
 
     if (error) {
