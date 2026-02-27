@@ -5,6 +5,7 @@ import { KommoService } from "../../services/kommo.js";
 import { getCrmMetrics, CrmMetrics } from "../cache/crm-cache.js";
 import { requireAuth, AuthRequest } from "../middleware/requireAuth.js";
 import { supabase } from "../supabase.js";
+import { TeamKey, TEAMS } from "../../config.js";
 
 interface ChatSession {
   history: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }>;
@@ -14,39 +15,39 @@ interface ChatSession {
 const SESSION_TTL_MS = 30 * 60 * 1000;
 const sessions = new Map<string, ChatSession>();
 
-function buildSystemPrompt(metrics: CrmMetrics): string {
-  const { funis, vendedores, geral } = metrics;
+function buildSystemPrompt(allMetrics: Array<{ team: string; label: string; metrics: CrmMetrics }>): string {
+  const sections = allMetrics.map(({ label, metrics }) => {
+    const { funis, vendedores, geral } = metrics;
 
-  const funisTexto = Object.values(funis)
-    .map(
-      (f) =>
-        `  ${f.nome}: ${f.total} leads | ganhos: ${f.ganhos} | perdidos: ${f.perdidos} | ativos: ${f.ativos} | conversão: ${f.conversao} | novos semana: ${f.novosSemana} | novos mês: ${f.novosMes}`
-    )
-    .join("\n");
+    const funisTexto = Object.values(funis)
+      .map(
+        (f) =>
+          `  ${f.nome}: ${f.total} leads | ganhos: ${f.ganhos} | perdidos: ${f.perdidos} | ativos: ${f.ativos} | conversão: ${f.conversao} | novos semana: ${f.novosSemana} | novos mês: ${f.novosMes}`
+      )
+      .join("\n");
 
-  const vendedoresTexto = vendedores
-    .map(
-      (v) =>
-        `  ${v.nome} | ${v.funil} | total: ${v.total} | ganhos: ${v.ganhos} | perdidos: ${v.perdidos} | ativos: ${v.ativos} | conversão: ${v.conversao} | novos semana: ${v.novosSemana} | novos mês: ${v.novosMes}`
-    )
-    .join("\n");
+    const vendedoresTexto = vendedores
+      .map(
+        (v) =>
+          `  ${v.nome} | ${v.funil} | total: ${v.total} | ganhos: ${v.ganhos} | perdidos: ${v.perdidos} | ativos: ${v.ativos} | conversão: ${v.conversao} | novos semana: ${v.novosSemana} | novos mês: ${v.novosMes}`
+      )
+      .join("\n");
 
-  return `Você é o assistente inteligente do Kommo CRM da empresa Tryvion/Axion.
-Responda perguntas de gerentes com precisão, profissionalismo e análise aprofundada.
+    return `## ${label.toUpperCase()} — ATUALIZADO EM: ${metrics.atualizadoEm}
 
-DADOS ATUALIZADOS EM: ${metrics.atualizadoEm}
+RESUMO GERAL: ${geral.total} leads | ganhos: ${geral.ganhos} | perdidos: ${geral.perdidos} | ativos: ${geral.ativos} | conversão: ${geral.conversao} | novos hoje: ${geral.novosHoje}
 
-## RESUMO GERAL
-Total de leads: ${geral.total}
-Ganhos: ${geral.ganhos} | Perdidos: ${geral.perdidos} | Ativos: ${geral.ativos}
-Conversão geral: ${geral.conversao}
-Novos hoje: ${geral.novosHoje} | Novos esta semana: ${geral.novosSemana} | Novos este mês: ${geral.novosMes}
-
-## MÉTRICAS POR FUNIL
+MÉTRICAS POR FUNIL:
 ${funisTexto}
 
-## MÉTRICAS POR VENDEDOR × FUNIL
-${vendedoresTexto}
+MÉTRICAS POR VENDEDOR × FUNIL:
+${vendedoresTexto}`;
+  });
+
+  return `Você é o assistente inteligente do Kommo CRM da empresa.
+Responda perguntas de gerentes com precisão, profissionalismo e análise aprofundada.
+
+${sections.join("\n\n---\n\n")}
 
 ## REGRAS
 - Responda SEMPRE em Português Brasil.
@@ -57,7 +58,7 @@ ${vendedoresTexto}
 - Conversão = ganhos ÷ (ganhos + perdidos) × 100.`;
 }
 
-export function chatRouter(service: KommoService) {
+export function chatRouter(services: Record<TeamKey, KommoService>) {
   const router = Router();
   router.use(requireAuth as any);
 
@@ -73,8 +74,18 @@ export function chatRouter(service: KommoService) {
     }
 
     try {
-      const metrics = await getCrmMetrics(service);
-      const systemPrompt = buildSystemPrompt(metrics);
+      // Fetch metrics for all user's authorized teams
+      const userTeams = (req as AuthRequest).userTeams || [];
+      const allMetrics = await Promise.all(
+        userTeams
+          .filter((t) => services[t])
+          .map(async (t) => ({
+            team: t,
+            label: TEAMS[t].label,
+            metrics: await getCrmMetrics(t, services[t]),
+          }))
+      );
+      const systemPrompt = buildSystemPrompt(allMetrics);
 
       const sessionId = incomingSessionId || randomUUID();
       const now = Date.now();
