@@ -867,3 +867,48 @@ tr:hover td {
   outline: none;
   border-color: var(--accent-color);
 }
+
+/* ── Chat Markdown ────────────────────────────── */
+.markdown-body h1, .markdown-body h2, .markdown-body h3 {
+  margin: 0.8rem 0 0.4rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.markdown-body h3 { font-size: 0.95rem; }
+.markdown-body p { margin: 0.4rem 0; line-height: 1.6; }
+.markdown-body ul, .markdown-body ol {
+  margin: 0.4rem 0;
+  padding-left: 1.4rem;
+}
+.markdown-body li { margin: 0.2rem 0; }
+.markdown-body strong { color: var(--text-primary); font-weight: 700; }
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  margin: 0.8rem 0;
+}
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.6rem 0;
+  font-size: 0.85rem;
+}
+.markdown-body th {
+  background: rgba(255,255,255,0.07);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  color: var(--accent-color);
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+}
+.markdown-body td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.markdown-body tr:last-child td { border-bottom: none; }
+.markdown-body code {
+  background: rgba(255,255,255,0.08);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.82rem;
+}

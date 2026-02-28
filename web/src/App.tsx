@@ -17,6 +17,8 @@ import {
     AlertTriangle,
     Clock
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface Pipeline {
     id: number;
@@ -521,7 +523,9 @@ function App() {
                         {messages.map((m, i) => (
                             <div key={i} className={`message-wrapper ${m.role === 'user' ? 'user' : 'assistant'}`}>
                                 <div className="bubble glass">
-                                    <div className="text">{m.content}</div>
+                                    <div className="text markdown-body">
+                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                                    </div>
                                     {m.data && (
                                         <div className="data-blob">
                                             <pre>{JSON.stringify(m.data, null, 2)}</pre>

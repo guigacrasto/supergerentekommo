@@ -82,7 +82,14 @@ ${sections.join("\n\n---\n\n")}
 - Identifique **ANOMALIAS**: agentes muito acima ou abaixo da média, funis com conversão muito baixa.
 - Conclua análises com uma **RECOMENDAÇÃO DE AÇÃO** clara e objetiva.
 - Para perguntas sobre acompanhamento: use os dados de ALERTAS DE ATIVIDADE acima.
-- Use tom executivo: direto, baseado em dados, orientado a resultado.`;
+- Use tom executivo: direto, baseado em dados, orientado a resultado.
+
+## FORMATAÇÃO OBRIGATÓRIA
+- Use emojis para organizar seções: 📊 para dados/tabelas, 💡 para insights, ⚠️ para anomalias, ✅ para recomendações, 🏆 para rankings, 📋 para resumos
+- Sempre que houver métricas numéricas, use tabela Markdown: | coluna | valor |
+- Separe seções com linha horizontal: ---
+- Máximo 3 bullet points por seção — seja conciso
+- Nunca escreva parágrafos longos sem estrutura visual`;
 }
 
 export function chatRouter(services: Record<TeamKey, KommoService>) {
