@@ -54,9 +54,9 @@ async function fetchActivity(
 
   const activeLeads = crmMetrics.activeLeads;
 
-  // Leads without activity in last 48h
+  // Leads without activity in last 48h but less than 7 days (warning tier)
   const leadsAbandonados48h: AlertLead[] = activeLeads
-    .filter((l) => l.updatedAt < cutoff48h)
+    .filter((l) => l.updatedAt < cutoff48h && l.updatedAt >= cutoff7d)
     .map((l) => ({
       id: l.id,
       nome: l.titulo,
@@ -80,13 +80,27 @@ async function fetchActivity(
     .sort((a, b) => b.diasSemAtividade - a.diasSemAtividade)
     .slice(0, 30);
 
-  // Overdue tasks — single API call
+  // Overdue tasks — paginated fetch
   let tarefasVencidas: AlertTask[] = [];
   try {
-    const tasksRes = await service.client.get("/tasks", {
-      params: { filter: { is_completed: 0, entity_type: "leads" }, limit: 250 },
-    });
-    const tasks: any[] = tasksRes.data?._embedded?.tasks || [];
+    const tasks: any[] = [];
+    let taskPage = 1;
+    const taskLimit = 250;
+    while (true) {
+      console.log(`[ActivityCache:${team}] Fetching tasks page ${taskPage}...`);
+      const tasksRes = await service.client.get("/tasks", {
+        params: { filter: { is_completed: 0, entity_type: "leads" }, limit: taskLimit, page: taskPage },
+      });
+      const pageTasks: any[] = tasksRes.data?._embedded?.tasks || [];
+      if (pageTasks.length === 0) break;
+      tasks.push(...pageTasks);
+      if (pageTasks.length < taskLimit) break;
+      if (taskPage > 100) {
+        console.warn(`[ActivityCache:${team}] Reached 100 pages of tasks, stopping for safety.`);
+        break;
+      }
+      taskPage++;
+    }
 
     const leadNameMap = new Map<number, string>(
       activeLeads.map((l) => [l.id, l.titulo])
@@ -96,15 +110,15 @@ async function fetchActivity(
     );
 
     tarefasVencidas = tasks
-      .filter((t) => t.complete_till > 0 && t.complete_till < now)
+      .filter((t) => typeof t.complete_till === 'number' && t.complete_till > 0 && t.complete_till < now)
       .map((t) => ({
         id: t.id,
         texto: t.text || "Tarefa",
         vendedor: userNameMap.get(t.responsible_user_id) || `User ${t.responsible_user_id}`,
-        leadId: t.entity_id,
-        leadNome: leadNameMap.get(t.entity_id) || `Lead ${t.entity_id}`,
+        leadId: t.entity_id || 0,
+        leadNome: leadNameMap.get(t.entity_id) || `Lead ${t.entity_id || 0}`,
         diasVencida: Math.max(0, Math.floor((now - t.complete_till) / 86400)),
-        kommoUrl: `https://${subdomain}.kommo.com/leads/detail/${t.entity_id}`,
+        kommoUrl: `https://${subdomain}.kommo.com/leads/detail/${t.entity_id || 0}`,
       }))
       .sort((a, b) => b.diasVencida - a.diasVencida)
       .slice(0, 30);
