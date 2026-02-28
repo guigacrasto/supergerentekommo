@@ -132,7 +132,7 @@ function App() {
 
     const [activeTab, setActiveTab] = useState('chat');
     const [messages, setMessages] = useState<Message[]>([
-        { role: 'assistant', content: 'Olá! Sou o assistente do Kommo. Posso buscar dados reais dos funis Tryvion, Matriz ou Axion. O que deseja saber hoje?' }
+        { role: 'assistant', content: 'Olá! Sou o assistente inteligente do Kommo CRM. Tenho acesso aos dados reais dos seus funis — leads, conversões, agentes e muito mais. O que deseja saber?' }
     ]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
@@ -201,7 +201,7 @@ function App() {
         setPage('login');
         setPipelines([]);
         setSessionId(null);
-        setMessages([{ role: 'assistant', content: 'Olá! Sou o assistente do Kommo. Posso buscar dados reais dos funis Tryvion, Matriz ou Axion. O que deseja saber hoje?' }]);
+        setMessages([{ role: 'assistant', content: 'Olá! Sou o assistente inteligente do Kommo CRM. Tenho acesso aos dados reais dos seus funis — leads, conversões, agentes e muito mais. O que deseja saber?' }]);
         setTabData(null);
         setAdminUsers([]);
         setAdminTokens([]);
@@ -506,7 +506,7 @@ function App() {
                         <input
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            placeholder="Ex: Quantos leads na Tryvion hoje?"
+                            placeholder="Ex: Quantos leads ativos hoje? Quem fechou mais essa semana?"
                         />
                         <button type="submit" disabled={loading}>
                             <Send size={18} />
