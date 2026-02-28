@@ -156,6 +156,11 @@ function App() {
     const [filterAgente, setFilterAgente] = useState('');
     const [filterFunil, setFilterFunil] = useState('');
     const [filterEquipe, setFilterEquipe] = useState('');
+    const [mentors, setMentors] = useState<Array<{id:string;name:string;description:string;system_prompt:string;methodology_text:string;is_active:boolean}>>([]);
+    const [mentorForm, setMentorForm] = useState<{id?:string;name:string;description:string;system_prompt:string;methodology_text:string;is_active:boolean}>({name:'',description:'',system_prompt:'',methodology_text:'',is_active:true});
+    const [mentorEditing, setMentorEditing] = useState(false);
+    const [availableMentors, setAvailableMentors] = useState<Array<{id:string;name:string;description:string}>>([]);
+    const [selectedMentorIds, setSelectedMentorIds] = useState<string[]>([]);
 
     useEffect(() => {
         const token = localStorage.getItem('kommo_token');
@@ -179,6 +184,13 @@ function App() {
             });
             console.log("App: pipelines received:", res.data);
             setPipelines(res.data);
+            // Also fetch available mentors
+            try {
+                const mentorsRes = await axios.get('/api/chat/mentors', { headers: { Authorization: `Bearer ${t}` } });
+                setAvailableMentors(mentorsRes.data);
+            } catch {
+                // mentors are optional — ignore errors
+            }
         } catch (e) {
             console.error("App: error fetching pipelines", e);
         }
@@ -217,14 +229,16 @@ function App() {
     const loadAdminPanel = async () => {
         setAdminLoading(true);
         try {
-            const [usersRes, tokensRes, statusRes] = await Promise.all([
+            const [usersRes, tokensRes, statusRes, mentorsRes] = await Promise.all([
                 axios.get('/api/admin/users', { headers: { Authorization: `Bearer ${authToken}` } }),
                 axios.get('/api/admin/tokens', { headers: { Authorization: `Bearer ${authToken}` } }),
                 axios.get('/api/oauth/status', { headers: { Authorization: `Bearer ${authToken}` } }),
+                axios.get('/api/admin/mentors', { headers: { Authorization: `Bearer ${authToken}` } }),
             ]);
             setAdminUsers(usersRes.data);
             setAdminTokens(tokensRes.data);
             setTokenStatus(statusRes.data);
+            setMentors(mentorsRes.data);
         } catch (e) {
             console.error("Admin load error", e);
         } finally {
@@ -281,7 +295,7 @@ function App() {
         setLoading(true);
 
         try {
-            const res = await axios.post('/api/chat', { message: userMsg, sessionId }, {
+            const res = await axios.post('/api/chat', { message: userMsg, sessionId, mentorIds: selectedMentorIds }, {
                 headers: { Authorization: `Bearer ${authToken}` }
             });
             setSessionId(res.data.sessionId);
@@ -512,6 +526,94 @@ function App() {
                             </div>
                         )}
                     </div>
+
+                    <div className="admin-section">
+                        <h2>🤖 Mentores / Agentes</h2>
+                        <div className="mentor-form glass">
+                            <input
+                                placeholder="Nome do mentor"
+                                value={mentorForm.name}
+                                onChange={e => setMentorForm(f => ({...f, name: e.target.value}))}
+                            />
+                            <input
+                                placeholder="Descrição curta"
+                                value={mentorForm.description}
+                                onChange={e => setMentorForm(f => ({...f, description: e.target.value}))}
+                            />
+                            <textarea
+                                placeholder="Personalidade / Instruções (ex: Você é um coach agressivo de vendas...)"
+                                rows={4}
+                                value={mentorForm.system_prompt}
+                                onChange={e => setMentorForm(f => ({...f, system_prompt: e.target.value}))}
+                            />
+                            <div className="file-upload-row">
+                                <label className="file-upload-label">
+                                    <span>Metodologia (.txt ou .md)</span>
+                                    <input type="file" accept=".txt,.md" onChange={e => {
+                                        const file = e.target.files?.[0];
+                                        if (!file) return;
+                                        const reader = new FileReader();
+                                        reader.onload = ev => setMentorForm(f => ({...f, methodology_text: ev.target?.result as string || ''}));
+                                        reader.readAsText(file);
+                                    }} />
+                                </label>
+                                {mentorForm.methodology_text && <span className="file-ok">✅ Arquivo carregado ({Math.round(mentorForm.methodology_text.length / 1024)}KB)</span>}
+                            </div>
+                            <label className="checkbox-row">
+                                <input
+                                    type="checkbox"
+                                    checked={mentorForm.is_active}
+                                    onChange={e => setMentorForm(f => ({...f, is_active: e.target.checked}))}
+                                />
+                                Ativo (visível no chat)
+                            </label>
+                            <div className="form-actions">
+                                <button className="action-btn approve" onClick={async () => {
+                                    const method = mentorForm.id ? 'put' : 'post';
+                                    const url = mentorForm.id ? `/api/admin/mentors/${mentorForm.id}` : '/api/admin/mentors';
+                                    await axios[method](url, mentorForm, { headers: { Authorization: `Bearer ${authToken}` } });
+                                    setMentorForm({name:'',description:'',system_prompt:'',methodology_text:'',is_active:true});
+                                    setMentorEditing(false);
+                                    loadAdminPanel();
+                                }} disabled={!mentorForm.name.trim() || !mentorForm.system_prompt.trim()}>
+                                    {mentorForm.id ? 'Salvar Alterações' : 'Criar Mentor'}
+                                </button>
+                                {mentorForm.id && (
+                                    <button onClick={() => {
+                                        setMentorForm({name:'',description:'',system_prompt:'',methodology_text:'',is_active:true});
+                                        setMentorEditing(false);
+                                    }}>
+                                        Cancelar
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                        <div className="mentor-list">
+                            {mentors.length === 0 && !adminLoading && (
+                                <div className="empty-text">Nenhum mentor criado ainda.</div>
+                            )}
+                            {mentors.map(m => (
+                                <div key={m.id} className={`mentor-row glass ${!m.is_active ? 'inactive' : ''}`}>
+                                    <div className="mentor-info">
+                                        <strong className="mentor-name">{m.name}</strong>
+                                        {m.description && <span className="mentor-desc">{m.description}</span>}
+                                        {!m.is_active && <span className="status-badge denied">inativo</span>}
+                                    </div>
+                                    <div className="mentor-actions">
+                                        <button className="action-btn" onClick={() => {
+                                            setMentorForm({...m});
+                                            setMentorEditing(true);
+                                        }}>Editar</button>
+                                        <button className="action-btn deny" onClick={async () => {
+                                            if (!confirm(`Excluir mentor "${m.name}"?`)) return;
+                                            await axios.delete(`/api/admin/mentors/${m.id}`, { headers: { Authorization: `Bearer ${authToken}` } });
+                                            loadAdminPanel();
+                                        }}>Excluir</button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                 </div>
             );
         }
@@ -540,6 +642,48 @@ function App() {
                             </div>
                         )}
                     </div>
+                    {availableMentors.length > 0 && (
+                        <div className="mentor-selector">
+                            <span className="mentor-selector-label">Mentor:</span>
+                            <button
+                                type="button"
+                                className={`mentor-chip ${selectedMentorIds.length === 0 ? 'active' : ''}`}
+                                onClick={() => {
+                                    setSelectedMentorIds([]);
+                                    setMessages([{role:'assistant',content:'Olá! Sou o assistente inteligente do Kommo CRM. Tenho acesso aos dados reais dos seus funis — leads, conversões, agentes e muito mais. O que deseja saber?'}]);
+                                    setSessionId(null);
+                                }}
+                            >
+                                🤖 Padrão
+                            </button>
+                            {availableMentors.map(m => (
+                                <button
+                                    key={m.id}
+                                    type="button"
+                                    className={`mentor-chip ${selectedMentorIds.includes(m.id) ? 'active' : ''}`}
+                                    title={m.description}
+                                    onClick={() => {
+                                        setSelectedMentorIds(prev => {
+                                            const next = prev.includes(m.id)
+                                                ? prev.filter(id => id !== m.id)
+                                                : [...prev, m.id];
+                                            const newCount = next.length;
+                                            const welcomeMsg = newCount === 0
+                                                ? 'Olá! Sou o assistente inteligente do Kommo CRM. Tenho acesso aos dados reais dos seus funis — leads, conversões, agentes e muito mais. O que deseja saber?'
+                                                : newCount === 1
+                                                ? `Olá! Sou ${availableMentors.find(x => next.includes(x.id))?.name ?? 'o mentor'}. Como posso ajudar?`
+                                                : `⚖️ Conselho ativado com ${newCount} mentores. Faça sua pergunta.`;
+                                            setMessages([{role:'assistant',content:welcomeMsg}]);
+                                            setSessionId(null);
+                                            return next;
+                                        });
+                                    }}
+                                >
+                                    {m.name}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                     <form className="input-bar glass" onSubmit={handleSend}>
                         <input
                             value={input}
