@@ -67,7 +67,7 @@ async function fetchActivity(
     .sort((a, b) => b.diasSemAtividade - a.diasSemAtividade)
     .slice(0, 30);
 
-  // Leads without activity in last 7 days (superset of 48h)
+  // Leads without activity for 7+ days (critical tier — exclusive of the 48h bucket)
   const leadsEmRisco7d: AlertLead[] = activeLeads
     .filter((l) => l.updatedAt < cutoff7d)
     .map((l) => ({
