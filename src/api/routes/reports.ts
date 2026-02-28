@@ -2,6 +2,7 @@ import { Router } from "express";
 import { KommoService } from "../../services/kommo.js";
 import { TeamKey } from "../../config.js";
 import { getCrmMetrics } from "../cache/crm-cache.js";
+import { getActivityMetrics, ActivityMetrics } from "../cache/activity-cache.js";
 import { requireAuth, AuthRequest } from "../middleware/requireAuth.js";
 
 export function reportsRouter(services: Record<TeamKey, KommoService>) {
@@ -87,6 +88,31 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
             ativos: funil.ativos,
           });
         }
+      }
+
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // GET /api/reports/activity — leads sem atividade e tarefas vencidas por equipe
+  router.get("/activity", async (req: AuthRequest, res) => {
+    const userTeams = req.userTeams || [];
+    try {
+      const result: Array<{
+        team: TeamKey;
+        label: string;
+        activity: ActivityMetrics;
+      }> = [];
+
+      for (const team of userTeams) {
+        const service = services[team];
+        if (!service) continue;
+
+        const crmMetrics = await getCrmMetrics(team, service);
+        const activity = await getActivityMetrics(team, service, crmMetrics);
+        result.push({ team, label: team === "azul" ? "Equipe Azul" : "Equipe Amarela", activity });
       }
 
       res.json(result);
