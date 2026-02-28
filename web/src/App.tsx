@@ -547,12 +547,12 @@ function App() {
                                                     .map((funil: any) => (
                                                         <div key={`${funil.team}-${funil.nome}`} className={`summary-card glass team-border-${team}`}>
                                                             <div className="summary-card-name">
-                                                                {funil.nome.replace('FUNIL ', '')}
+                                                                {(funil.nome ?? '').replace('FUNIL ', '')}
                                                             </div>
                                                             <div className="summary-stats">
                                                                 <div className="summary-stat">
                                                                     <span className="summary-value highlight">{funil.novosHoje}</span>
-                                                                    <span className="summary-label">hoje</span>
+                                                                    <span className="summary-label">últimas 24h</span>
                                                                 </div>
                                                                 <div className="summary-stat">
                                                                     <span className="summary-value">{funil.novosMes}</span>
