@@ -22,6 +22,7 @@ export interface FunilMetrics {
   perdidos: number;
   ativos: number;
   conversao: string;
+  novosHoje: number;
   novosSemana: number;
   novosMes: number;
 }
@@ -115,6 +116,7 @@ async function fetchAndCompute(team: TeamKey, service: KommoService): Promise<Cr
       perdidos,
       ativos,
       conversao: toConversao(ganhos, perdidos),
+      novosHoje: countPeriod(leads, 1),
       novosSemana: countPeriod(leads, 7),
       novosMes: countPeriod(leads, 30),
     };
