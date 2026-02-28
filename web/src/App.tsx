@@ -15,7 +15,9 @@ import {
     RefreshCw,
     PieChart,
     AlertTriangle,
-    Clock
+    Clock,
+    Sun,
+    Moon
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -56,8 +58,8 @@ function LoginPage({ onLogin, onGoRegister }: { onLogin: (email: string, passwor
         <div className="auth-page">
             <div className="auth-card glass">
                 <div className="brand">
-                    <div className="logo">KG</div>
-                    <span>Kommo Agent</span>
+                    <div className="logo">AK</div>
+                    <span>AssistenteKommo</span>
                 </div>
                 <h2>Entrar</h2>
                 {error && <div className="auth-error">{error}</div>}
@@ -99,7 +101,7 @@ function RegisterPage({ onRegister, onGoLogin }: { onRegister: (name: string, em
         return (
             <div className="auth-page">
                 <div className="auth-card glass">
-                    <div className="brand"><div className="logo">KG</div><span>Kommo Agent</span></div>
+                    <div className="brand"><div className="logo">AK</div><span>AssistenteKommo</span></div>
                     <h2>Cadastro realizado!</h2>
                     <p style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
                         Aguarde a aprovação do administrador para acessar o sistema.
@@ -113,7 +115,7 @@ function RegisterPage({ onRegister, onGoLogin }: { onRegister: (name: string, em
     return (
         <div className="auth-page">
             <div className="auth-card glass">
-                <div className="brand"><div className="logo">KG</div><span>Kommo Agent</span></div>
+                <div className="brand"><div className="logo">AK</div><span>AssistenteKommo</span></div>
                 <h2>Criar conta</h2>
                 {error && <div className="auth-error">{error}</div>}
                 <form onSubmit={handleSubmit}>
@@ -165,6 +167,14 @@ function App() {
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
     const [alertFilter, setAlertFilter] = useState<'todos' | 'risco48h' | 'risco7d' | 'tarefas'>('todos');
     const [alertEquipeFilter, setAlertEquipeFilter] = useState<'todas' | 'azul' | 'amarela'>('todas');
+    const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+        return (localStorage.getItem('ak_theme') as 'dark' | 'light') || 'dark';
+    });
+
+    useEffect(() => {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('ak_theme', theme);
+    }, [theme]);
 
     useEffect(() => {
         const token = localStorage.getItem('kommo_token');
@@ -1086,11 +1096,21 @@ function App() {
 
     return (
         <div className="app-layout">
-            <aside className="sidebar glass">
+            <aside className="sidebar">
                 <div className="brand">
-                    <div className="logo">KG</div>
-                    <span>Kommo Agent</span>
+                    <div className="logo">AK</div>
+                    <span>AssistenteKommo</span>
                 </div>
+
+                {currentUser && (
+                    <div className="user-info">
+                        <div className="user-avatar">{currentUser.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}</div>
+                        <div>
+                            <span className="user-name">{currentUser.name}</span>
+                            <span className="user-role">{currentUser.role}</span>
+                        </div>
+                    </div>
+                )}
 
                 <nav>
                     <div className="group">
@@ -1099,25 +1119,25 @@ function App() {
                             className={activeTab === 'chat' && page !== 'admin' ? 'active' : ''}
                             onClick={() => { setPage('app'); setActiveTab('chat'); }}
                         >
-                            <MessageSquare size={18} /> Chat Atual
-                        </button>
-                        <button
-                            className={activeTab === 'summary' && page !== 'admin' ? 'active' : ''}
-                            onClick={() => { setPage('app'); loadTabData('summary'); }}
-                        >
-                            <PieChart size={18} /> Resumo Geral
-                        </button>
-                        <button
-                            className={activeTab === 'alerts' && page !== 'admin' ? 'active' : ''}
-                            onClick={() => { setPage('app'); loadTabData('alerts'); }}
-                        >
-                            <AlertTriangle size={18} /> Painel de Alertas
+                            <MessageSquare size={18} /> Chat
                         </button>
                         <button
                             className={activeTab === 'agents' && page !== 'admin' ? 'active' : ''}
                             onClick={() => { setPage('app'); loadTabData('agents'); }}
                         >
-                            <BarChart3 size={18} /> Relatório Agentes
+                            <BarChart3 size={18} /> Agentes
+                        </button>
+                        <button
+                            className={activeTab === 'summary' && page !== 'admin' ? 'active' : ''}
+                            onClick={() => { setPage('app'); loadTabData('summary'); }}
+                        >
+                            <PieChart size={18} /> Resumo
+                        </button>
+                        <button
+                            className={activeTab === 'alerts' && page !== 'admin' ? 'active' : ''}
+                            onClick={() => { setPage('app'); loadTabData('alerts'); }}
+                        >
+                            <AlertTriangle size={18} /> Alertas
                         </button>
                     </div>
 
@@ -1153,12 +1173,6 @@ function App() {
                 </nav>
 
                 <div className="user-section">
-                    {currentUser && (
-                        <div className="user-info">
-                            <span className="user-name">{currentUser.name}</span>
-                            <span className="user-role">{currentUser.role}</span>
-                        </div>
-                    )}
                     <div className="user-actions">
                         {currentUser?.role === 'admin' && (
                             <button
@@ -1173,11 +1187,16 @@ function App() {
                                 <MessageSquare size={18} /> Voltar
                             </button>
                         )}
+                        <button className="theme-toggle" onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}>
+                            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+                            {theme === 'dark' ? 'Modo Claro' : 'Modo Escuro'}
+                        </button>
                         <button className="logout-btn" onClick={handleLogout}>
                             <LogOut size={18} /> Sair
                         </button>
                     </div>
                 </div>
+                <div className="sidebar-copyright">&copy; 2026 Antigravity</div>
             </aside>
 
             <main className="content">
