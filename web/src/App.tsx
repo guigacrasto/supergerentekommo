@@ -205,6 +205,7 @@ function App() {
         setTabData(null);
         setAdminUsers([]);
         setAdminTokens([]);
+        setExpandedTeams(new Set());
     };
 
     const loadAdminPanel = async () => {
