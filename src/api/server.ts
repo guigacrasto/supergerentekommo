@@ -21,6 +21,8 @@ export function createServer(services: Record<TeamKey, KommoService>) {
   app.use(cors());
   app.use(express.json());
 
+  app.get("/health", (_req, res) => { res.json({ ok: true }); });
+
   app.use("/api/pipelines", pipelinesRouter(services));
   app.use("/api/leads", leadsRouter(services));
   app.use("/api/reports", reportsRouter(services));
