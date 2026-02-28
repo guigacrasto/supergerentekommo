@@ -14,6 +14,7 @@ import {
     Filter,
     RefreshCw,
     PieChart,
+    AlertTriangle,
     Clock
 } from 'lucide-react';
 
@@ -309,6 +310,11 @@ function App() {
                     headers: { Authorization: `Bearer ${authToken}` }
                 });
                 setTabData(res.data);
+            } else if (tab === 'alerts') {
+                res = await axios.get('/api/reports/activity', {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+                setTabData(res.data);
             } else if (tab.startsWith('brand-')) {
                 const pid = tab.replace('brand-', '');
                 console.log(`App: loading brand report for ${pid}...`);
@@ -579,6 +585,122 @@ function App() {
             );
         }
 
+        if (activeTab === 'alerts') {
+            const alertsData: Array<{
+                team: string;
+                label: string;
+                activity: {
+                    leadsAbandonados48h: Array<{ id: number; nome: string; vendedor: string; diasSemAtividade: number; kommoUrl: string }>;
+                    leadsEmRisco7d: Array<{ id: number; nome: string; vendedor: string; diasSemAtividade: number; kommoUrl: string }>;
+                    tarefasVencidas: Array<{ id: number; texto: string; vendedor: string; leadId: number; leadNome: string; diasVencida: number; kommoUrl: string }>;
+                };
+            }> = Array.isArray(tabData) ? tabData : [];
+
+            const totalAlertas = alertsData.reduce(
+                (sum, t) => sum + t.activity.leadsAbandonados48h.length + t.activity.tarefasVencidas.length,
+                0
+            );
+
+            return (
+                <div className="tab-view">
+                    <header className="view-header">
+                        <div className="title-area">
+                            <h1>Painel de Alertas</h1>
+                        </div>
+                    </header>
+                    <section className="view-body">
+                        {loading ? (
+                            <div className="loading">
+                                <RefreshCw className="spin" />
+                                <span>Carregando alertas...</span>
+                            </div>
+                        ) : alertsData.length === 0 ? (
+                            <div className="empty">Nenhum dado disponível.</div>
+                        ) : totalAlertas === 0 ? (
+                            <div className="alerts-all-clear glass">
+                                <CheckCircle2 size={40} />
+                                <p>Tudo em dia! Nenhum alerta no momento.</p>
+                            </div>
+                        ) : (
+                            <div className="alerts-content">
+                                {alertsData.map(({ team, label, activity }) => (
+                                    <div key={team} className="alerts-team-section">
+                                        <h2 className={`alerts-team-title ${team}`}>{label}</h2>
+
+                                        {activity.leadsAbandonados48h.length > 0 && (
+                                            <div className="alert-section alert-red">
+                                                <div className="alert-section-header">
+                                                    <AlertTriangle size={16} />
+                                                    <span>Sem atividade há +48h — {activity.leadsAbandonados48h.length} lead{activity.leadsAbandonados48h.length !== 1 ? 's' : ''}</span>
+                                                </div>
+                                                {activity.leadsAbandonados48h.map((lead) => (
+                                                    <a
+                                                        key={lead.id}
+                                                        href={lead.kommoUrl}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="alert-row glass"
+                                                    >
+                                                        <span className="alert-lead-name">{lead.nome}</span>
+                                                        <span className="alert-meta">{lead.vendedor}</span>
+                                                        <span className="alert-badge red">{lead.diasSemAtividade}d</span>
+                                                    </a>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {activity.leadsEmRisco7d.length > 0 && (
+                                            <div className="alert-section alert-yellow">
+                                                <div className="alert-section-header">
+                                                    <Clock size={16} />
+                                                    <span>Em risco (sem atividade +7d) — {activity.leadsEmRisco7d.length} lead{activity.leadsEmRisco7d.length !== 1 ? 's' : ''}</span>
+                                                </div>
+                                                {activity.leadsEmRisco7d.map((lead) => (
+                                                    <a
+                                                        key={lead.id}
+                                                        href={lead.kommoUrl}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="alert-row glass"
+                                                    >
+                                                        <span className="alert-lead-name">{lead.nome}</span>
+                                                        <span className="alert-meta">{lead.vendedor}</span>
+                                                        <span className="alert-badge yellow">{lead.diasSemAtividade}d</span>
+                                                    </a>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {activity.tarefasVencidas.length > 0 && (
+                                            <div className="alert-section alert-orange">
+                                                <div className="alert-section-header">
+                                                    <XCircle size={16} />
+                                                    <span>Tarefas vencidas — {activity.tarefasVencidas.length}</span>
+                                                </div>
+                                                {activity.tarefasVencidas.map((task) => (
+                                                    <a
+                                                        key={task.id}
+                                                        href={task.kommoUrl}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="alert-row glass"
+                                                    >
+                                                        <span className="alert-lead-name">{task.leadNome}</span>
+                                                        <span className="alert-meta">{task.vendedor} · {task.texto}</span>
+                                                        <span className="alert-badge orange">{task.diasVencida}d</span>
+                                                    </a>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </section>
+                </div>
+            );
+        }
+
         const currentPipe = pipelines.find(p => `brand-${p.id}` === activeTab);
         const title = activeTab === 'agents' ? 'Relatório de Performance' : `Novos Leads: ${currentPipe?.name.replace('FUNIL ', '') || 'Marca'}`;
 
@@ -721,6 +843,12 @@ function App() {
                             onClick={() => { setPage('app'); loadTabData('summary'); }}
                         >
                             <PieChart size={18} /> Resumo Geral
+                        </button>
+                        <button
+                            className={activeTab === 'alerts' && page !== 'admin' ? 'active' : ''}
+                            onClick={() => { setPage('app'); loadTabData('alerts'); }}
+                        >
+                            <AlertTriangle size={18} /> Painel de Alertas
                         </button>
                         <button
                             className={activeTab === 'agents' && page !== 'admin' ? 'active' : ''}

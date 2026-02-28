@@ -756,3 +756,93 @@ tr:hover td {
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
+
+/* ── Painel de Alertas ────────────────────────────── */
+.alerts-content {
+  padding: 24px;
+}
+.alerts-all-clear {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px;
+  margin: 24px;
+  border-radius: 12px;
+  color: #4ade80;
+}
+.alerts-all-clear p {
+  font-size: 1rem;
+  color: #94a3b8;
+}
+.alerts-team-section {
+  margin-bottom: 32px;
+}
+.alerts-team-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
+}
+.alerts-team-title.azul   { color: #60a5fa; }
+.alerts-team-title.amarela { color: #fbbf24; }
+
+.alert-section {
+  margin-bottom: 20px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.alert-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.alert-red  .alert-section-header { background: rgba(239,68,68,0.15); color: #f87171; }
+.alert-yellow .alert-section-header { background: rgba(234,179,8,0.15); color: #facc15; }
+.alert-orange .alert-section-header { background: rgba(249,115,22,0.15); color: #fb923c; }
+
+.alert-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  text-decoration: none;
+  color: inherit;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  transition: background 0.15s;
+}
+.alert-row:hover { background: rgba(255,255,255,0.04); }
+
+.alert-lead-name {
+  flex: 1;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #e2e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.alert-meta {
+  font-size: 0.75rem;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+.alert-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.alert-badge.red    { background: rgba(239,68,68,0.2);  color: #f87171; }
+.alert-badge.yellow { background: rgba(234,179,8,0.2);  color: #facc15; }
+.alert-badge.orange { background: rgba(249,115,22,0.2); color: #fb923c; }
