@@ -61,5 +61,39 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
     }
   });
 
+  // GET /api/reports/summary — novos hoje/mês + ativos por funil para todas as equipes autorizadas
+  router.get("/summary", async (req: AuthRequest, res) => {
+    const userTeams = req.userTeams || [];
+    try {
+      const result: Array<{
+        nome: string;
+        team: TeamKey;
+        novosHoje: number;
+        novosMes: number;
+        ativos: number;
+      }> = [];
+
+      for (const team of userTeams) {
+        const service = services[team];
+        if (!service) continue;
+
+        const metrics = await getCrmMetrics(team, service);
+        for (const funil of Object.values(metrics.funis)) {
+          result.push({
+            nome: funil.nome,
+            team,
+            novosHoje: funil.novosHoje,
+            novosMes: funil.novosMes,
+            ativos: funil.ativos,
+          });
+        }
+      }
+
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   return router;
 }
