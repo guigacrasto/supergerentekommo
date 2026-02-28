@@ -22,7 +22,7 @@ function buildSystemPrompt(allMetrics: Array<{ team: string; label: string; metr
     const funisTexto = Object.values(funis)
       .map(
         (f) =>
-          `  ${f.nome}: ${f.total} leads | ganhos: ${f.ganhos} | perdidos: ${f.perdidos} | ativos: ${f.ativos} | conversão: ${f.conversao} | novos semana: ${f.novosSemana} | novos mês: ${f.novosMes}`
+          `  ${f.nome}: ${f.total} leads | ganhos: ${f.ganhos} | perdidos: ${f.perdidos} | ativos: ${f.ativos} | conversão: ${f.conversao} | novos hoje: ${f.novosHoje} | novos semana: ${f.novosSemana} | novos mês: ${f.novosMes}`
       )
       .join("\n");
 
