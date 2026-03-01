@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import {
   PieChart,
   Pie,
@@ -7,34 +6,39 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { Card, CardHeader, CardTitle, Chip } from '@/components/ui';
-import { stripFunilPrefix } from '@/lib/utils';
+import { Card, CardHeader, CardTitle } from '@/components/ui';
 
-interface SummaryItem {
+interface AgentData {
   nome: string;
-  team: string;
-  novosHoje: number;
-  novosMes: number;
+  total: number;
   ativos: number;
 }
 
 interface TeamPieChartProps {
-  data: SummaryItem[];
+  team: string;
+  label: string;
+  agents: AgentData[];
+  color: string;
 }
 
-const TEAM_COLORS: Record<string, string> = {
-  azul: '#1F74EC',
-  amarela: '#F9AA3C',
-};
-
-const TEAM_NAMES: Record<string, string> = {
-  azul: 'Equipe Azul',
-  amarela: 'Equipe Amarela',
-};
-
-type TeamFilter = 'todas' | 'azul' | 'amarela';
-
 const RADIAN = Math.PI / 180;
+
+// Paleta de tons para cada equipe
+function generateShades(baseColor: string, count: number): string[] {
+  const r = parseInt(baseColor.slice(1, 3), 16);
+  const g = parseInt(baseColor.slice(3, 5), 16);
+  const b = parseInt(baseColor.slice(5, 7), 16);
+
+  if (count <= 1) return [baseColor];
+
+  return Array.from({ length: count }, (_, i) => {
+    const factor = 1 - (i * 0.6) / Math.max(count - 1, 1);
+    const nr = Math.round(r * factor + 255 * (1 - factor) * 0.15);
+    const ng = Math.round(g * factor + 255 * (1 - factor) * 0.15);
+    const nb = Math.round(b * factor + 255 * (1 - factor) * 0.15);
+    return `rgb(${Math.min(nr, 255)},${Math.min(ng, 255)},${Math.min(nb, 255)})`;
+  });
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function renderCustomLabel(props: any) {
@@ -52,7 +56,7 @@ function renderCustomLabel(props: any) {
       fill="white"
       textAnchor="middle"
       dominantBaseline="central"
-      fontSize={13}
+      fontSize={12}
       fontWeight={600}
     >
       {`${(percent * 100).toFixed(0)}%`}
@@ -60,73 +64,29 @@ function renderCustomLabel(props: any) {
   );
 }
 
-export function TeamPieChart({ data }: TeamPieChartProps) {
-  const [teamFilter, setTeamFilter] = useState<TeamFilter>('todas');
+export function TeamPieChart({ team, label, agents, color }: TeamPieChartProps) {
+  const chartData = agents
+    .map((a) => ({
+      name: a.nome,
+      value: a.total,
+    }))
+    .filter((d) => d.value > 0)
+    .sort((a, b) => b.value - a.value);
 
-  // Agrupar por equipe
-  const teamTotals = data.reduce<Record<string, number>>((acc, item) => {
-    const team = item.team;
-    acc[team] = (acc[team] || 0) + item.ativos;
-    return acc;
-  }, {});
-
-  // Dados para o grafico
-  const isFiltered = teamFilter !== 'todas';
-
-  const chartData = isFiltered
-    ? data
-        .filter((item) => item.team === teamFilter)
-        .map((item) => ({
-          name: stripFunilPrefix(item.nome),
-          value: item.ativos,
-        }))
-        .filter((d) => d.value > 0)
-    : Object.entries(teamTotals)
-        .map(([team, value]) => ({
-          name: TEAM_NAMES[team] || team,
-          value,
-          team,
-        }))
-        .filter((d) => d.value > 0);
-
-  const colors = isFiltered
-    ? chartData.map((_, i) => {
-        const base = TEAM_COLORS[teamFilter] || '#9566F2';
-        const opacity = 1 - i * 0.15;
-        return adjustOpacity(base, Math.max(opacity, 0.4));
-      })
-    : chartData.map((d) => TEAM_COLORS[(d as { team?: string }).team || ''] || '#9566F2');
-
+  const colors = generateShades(color, chartData.length);
   const total = chartData.reduce((sum, d) => sum + d.value, 0);
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Atendimentos por Equipe</CardTitle>
+        <CardTitle
+          className={
+            team === 'azul' ? 'text-accent-blue' : 'text-warning'
+          }
+        >
+          {label} — Atendimentos
+        </CardTitle>
       </CardHeader>
-
-      <div className="px-5 pt-3 pb-1">
-        <div className="flex flex-wrap gap-2">
-          <Chip
-            active={teamFilter === 'todas'}
-            onClick={() => setTeamFilter('todas')}
-          >
-            Todas
-          </Chip>
-          <Chip
-            active={teamFilter === 'azul'}
-            onClick={() => setTeamFilter('azul')}
-          >
-            Azul
-          </Chip>
-          <Chip
-            active={teamFilter === 'amarela'}
-            onClick={() => setTeamFilter('amarela')}
-          >
-            Amarela
-          </Chip>
-        </div>
-      </div>
 
       <div className="px-5 py-4">
         {total === 0 ? (
@@ -134,14 +94,14 @@ export function TeamPieChart({ data }: TeamPieChartProps) {
             Sem dados de atendimentos.
           </p>
         ) : (
-          <ResponsiveContainer width="100%" height={260}>
+          <ResponsiveContainer width="100%" height={280}>
             <PieChart>
               <Pie
                 data={chartData}
                 cx="50%"
                 cy="50%"
-                innerRadius={50}
-                outerRadius={100}
+                innerRadius={45}
+                outerRadius={95}
                 paddingAngle={2}
                 dataKey="value"
                 labelLine={false}
@@ -159,7 +119,9 @@ export function TeamPieChart({ data }: TeamPieChartProps) {
                   color: '#E0E3E9',
                   fontSize: '0.875rem',
                 }}
-                formatter={(value) => [`${value} ativos`]}
+                formatter={(value) => [
+                  `${value} leads (${total > 0 ? ((Number(value) / total) * 100).toFixed(1) : 0}%)`,
+                ]}
               />
               <Legend
                 wrapperStyle={{ fontSize: '0.75rem', color: '#959CA6' }}
@@ -170,12 +132,4 @@ export function TeamPieChart({ data }: TeamPieChartProps) {
       </div>
     </Card>
   );
-}
-
-/** Aplica opacidade a uma cor hex */
-function adjustOpacity(hex: string, opacity: number): string {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r},${g},${b},${opacity})`;
 }

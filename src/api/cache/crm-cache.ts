@@ -7,6 +7,8 @@ export interface VendedorMetrics {
   team: TeamKey;
   total: number;
   ganhos: number;
+  ganhosHoje: number;
+  ganhosSemana: number;
   perdidos: number;
   ativos: number;
   conversao: string;
@@ -78,6 +80,11 @@ function countPeriod(leads: any[], days: number): number {
   return leads.filter((l) => l.created_at >= cutoff).length;
 }
 
+function countWonPeriod(leads: any[], days: number): number {
+  const cutoff = Date.now() / 1000 - days * 86400;
+  return leads.filter((l) => l.status_id === STATUS.WON && l.closed_at >= cutoff).length;
+}
+
 async function fetchAndCompute(team: TeamKey, service: KommoService): Promise<CrmMetrics> {
   console.log(`[CrmCache:${team}] Buscando dados do CRM...`);
 
@@ -146,6 +153,8 @@ async function fetchAndCompute(team: TeamKey, service: KommoService): Promise<Cr
         team,
         total: mine.length,
         ganhos,
+        ganhosHoje: countWonPeriod(mine, 1),
+        ganhosSemana: countWonPeriod(mine, 7),
         perdidos,
         ativos: mine.length - ganhos - perdidos,
         conversao: toConversao(ganhos, perdidos),

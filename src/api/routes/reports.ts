@@ -96,6 +96,55 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
     }
   });
 
+  // GET /api/reports/dashboard — dados agregados por agente/equipe para o dashboard
+  router.get("/dashboard", async (req: AuthRequest, res) => {
+    const userTeams = req.userTeams || [];
+    try {
+      const agentsByTeam: Record<string, Array<{
+        nome: string;
+        total: number;
+        ganhos: number;
+        ganhosHoje: number;
+        ganhosSemana: number;
+        ativos: number;
+      }>> = {};
+
+      for (const team of userTeams) {
+        const service = services[team];
+        if (!service) continue;
+
+        const metrics = await getCrmMetrics(team, service);
+
+        // Agrupar vendedores por nome dentro desta equipe
+        const byAgent: Record<string, {
+          nome: string;
+          total: number;
+          ganhos: number;
+          ganhosHoje: number;
+          ganhosSemana: number;
+          ativos: number;
+        }> = {};
+
+        for (const v of metrics.vendedores) {
+          if (!byAgent[v.nome]) {
+            byAgent[v.nome] = { nome: v.nome, total: 0, ganhos: 0, ganhosHoje: 0, ganhosSemana: 0, ativos: 0 };
+          }
+          byAgent[v.nome].total += v.total;
+          byAgent[v.nome].ganhos += v.ganhos;
+          byAgent[v.nome].ganhosHoje += v.ganhosHoje;
+          byAgent[v.nome].ganhosSemana += v.ganhosSemana;
+          byAgent[v.nome].ativos += v.ativos;
+        }
+
+        agentsByTeam[team] = Object.values(byAgent).sort((a, b) => b.total - a.total);
+      }
+
+      res.json({ agentsByTeam });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // GET /api/reports/activity — leads sem atividade e tarefas vencidas por equipe
   router.get("/activity", async (req: AuthRequest, res) => {
     const userTeams = req.userTeams || [];

@@ -2,8 +2,8 @@ import { Trophy, Medal } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui';
 
 interface AgentSales {
-  agente: string;
-  vendaGanha: number;
+  nome: string;
+  vendas: number;
 }
 
 interface SalesRankingProps {
@@ -19,7 +19,8 @@ const MEDAL_COLORS: Record<number, string> = {
 
 export function SalesRanking({ title, data }: SalesRankingProps) {
   const sorted = [...data]
-    .sort((a, b) => b.vendaGanha - a.vendaGanha)
+    .filter((a) => a.vendas > 0)
+    .sort((a, b) => b.vendas - a.vendas)
     .slice(0, 5);
 
   return (
@@ -34,7 +35,7 @@ export function SalesRanking({ title, data }: SalesRankingProps) {
       <div className="p-5">
         {sorted.length === 0 ? (
           <p className="text-center text-body-md text-muted py-6">
-            Sem dados de vendas.
+            Nenhuma venda neste periodo.
           </p>
         ) : (
           <div className="flex flex-col gap-3">
@@ -44,7 +45,7 @@ export function SalesRanking({ title, data }: SalesRankingProps) {
 
               return (
                 <div
-                  key={agent.agente}
+                  key={agent.nome}
                   className="flex items-center gap-3 rounded-button border border-glass-border bg-surface-secondary px-4 py-3"
                 >
                   {/* Posicao */}
@@ -63,15 +64,17 @@ export function SalesRanking({ title, data }: SalesRankingProps) {
 
                   {/* Nome do agente */}
                   <span className="flex-1 font-heading text-body-md font-medium truncate">
-                    {agent.agente}
+                    {agent.nome}
                   </span>
 
                   {/* Contagem de vendas */}
                   <div className="flex items-center gap-1.5">
                     <span className="font-heading text-heading-sm text-primary">
-                      {agent.vendaGanha}
+                      {agent.vendas}
                     </span>
-                    <span className="text-body-sm text-muted">vendas</span>
+                    <span className="text-body-sm text-muted">
+                      {agent.vendas === 1 ? 'venda' : 'vendas'}
+                    </span>
                   </div>
 
                   {/* Badge de posicao para top 3 */}

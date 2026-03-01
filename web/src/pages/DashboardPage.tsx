@@ -47,16 +47,28 @@ interface ActivityTeam {
   };
 }
 
-interface AgentRow {
-  Agente?: string;
-  'Venda Ganha'?: string | number;
-  [key: string]: string | number | undefined;
+interface DashboardAgent {
+  nome: string;
+  total: number;
+  ganhos: number;
+  ganhosHoje: number;
+  ganhosSemana: number;
+  ativos: number;
 }
+
+interface DashboardData {
+  agentsByTeam: Record<string, DashboardAgent[]>;
+}
+
+const TEAM_COLORS: Record<string, string> = {
+  azul: '#1F74EC',
+  amarela: '#F9AA3C',
+};
 
 export function DashboardPage() {
   const [summary, setSummary] = useState<SummaryItem[]>([]);
   const [activity, setActivity] = useState<ActivityTeam[]>([]);
-  const [agents, setAgents] = useState<AgentRow[]>([]);
+  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -64,15 +76,15 @@ export function DashboardPage() {
 
     const fetchData = async () => {
       try {
-        const [summaryRes, activityRes, agentsRes] = await Promise.all([
+        const [summaryRes, activityRes, dashboardRes] = await Promise.all([
           api.get<SummaryItem[]>('/reports/summary'),
           api.get<ActivityTeam[]>('/reports/activity'),
-          api.get<AgentRow[]>('/reports/agents'),
+          api.get<DashboardData>('/reports/dashboard'),
         ]);
         if (!cancelled) {
           setSummary(summaryRes.data);
           setActivity(activityRes.data);
-          setAgents(agentsRes.data);
+          setDashboard(dashboardRes.data);
         }
       } catch (err) {
         console.error('[DashboardPage] Erro ao carregar dados:', err);
@@ -119,10 +131,31 @@ export function DashboardPage() {
   const allAlerts7d = activity.flatMap((t) => t.activity.leadsEmRisco7d);
   const allTarefas = activity.flatMap((t) => t.activity.tarefasVencidas);
 
-  // Preparar dados de vendas para os rankings
-  const salesData = agents.map((row) => ({
-    agente: String(row.Agente ?? ''),
-    vendaGanha: Number(row['Venda Ganha'] ?? 0),
+  // Dashboard data per team
+  const agentsByTeam = dashboard?.agentsByTeam ?? {};
+  const availableTeams = Object.keys(agentsByTeam);
+  const hasBothTeams = availableTeams.length >= 2;
+
+  // Rankings: agregar vendas de todas as equipes por agente
+  const allAgentsMap: Record<string, { nome: string; ganhosHoje: number; ganhosSemana: number }> = {};
+  for (const agents of Object.values(agentsByTeam)) {
+    for (const a of agents) {
+      if (!allAgentsMap[a.nome]) {
+        allAgentsMap[a.nome] = { nome: a.nome, ganhosHoje: 0, ganhosSemana: 0 };
+      }
+      allAgentsMap[a.nome].ganhosHoje += a.ganhosHoje;
+      allAgentsMap[a.nome].ganhosSemana += a.ganhosSemana;
+    }
+  }
+
+  const rankingHoje = Object.values(allAgentsMap).map((a) => ({
+    nome: a.nome,
+    vendas: a.ganhosHoje,
+  }));
+
+  const rankingSemana = Object.values(allAgentsMap).map((a) => ({
+    nome: a.nome,
+    vendas: a.ganhosSemana,
   }));
 
   return (
@@ -155,63 +188,74 @@ export function DashboardPage() {
         />
       </div>
 
-      {/* Team Summary + Pie Chart */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 grid grid-cols-1 gap-6 sm:grid-cols-2">
-          {teamSummaries.map(({ team, label, pipelines: pipes }) => (
-            <Card key={team}>
-              <CardHeader>
-                <CardTitle
-                  className={
-                    team === 'azul' ? 'text-accent-blue' : 'text-warning'
-                  }
+      {/* Team Summary Cards */}
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+        {teamSummaries.map(({ team, label, pipelines: pipes }) => (
+          <Card key={team}>
+            <CardHeader>
+              <CardTitle
+                className={
+                  team === 'azul' ? 'text-accent-blue' : 'text-warning'
+                }
+              >
+                {label}
+              </CardTitle>
+            </CardHeader>
+            <div className="flex flex-col gap-3 p-5">
+              {pipes.map((p) => (
+                <div
+                  key={`${p.team}-${p.nome}`}
+                  className="flex items-center justify-between rounded-button border border-glass-border bg-surface-secondary p-4"
                 >
-                  {label}
-                </CardTitle>
-              </CardHeader>
-              <div className="flex flex-col gap-3 p-5">
-                {pipes.map((p) => (
-                  <div
-                    key={`${p.team}-${p.nome}`}
-                    className="flex items-center justify-between rounded-button border border-glass-border bg-surface-secondary p-4"
-                  >
-                    <span className="font-heading text-heading-sm">
-                      {stripFunilPrefix(p.nome)}
-                    </span>
-                    <div className="flex items-center gap-6">
-                      <div className="flex flex-col items-center">
-                        <span className="font-heading text-heading-sm text-primary">
-                          {p.novosHoje}
-                        </span>
-                        <span className="text-body-sm text-muted">hoje</span>
-                      </div>
-                      <div className="flex flex-col items-center">
-                        <span className="font-heading text-heading-sm">
-                          {p.novosMes}
-                        </span>
-                        <span className="text-body-sm text-muted">mes</span>
-                      </div>
-                      <div className="flex flex-col items-center">
-                        <span className="font-heading text-heading-sm">
-                          {p.ativos}
-                        </span>
-                        <span className="text-body-sm text-muted">ativos</span>
-                      </div>
+                  <span className="font-heading text-heading-sm">
+                    {stripFunilPrefix(p.nome)}
+                  </span>
+                  <div className="flex items-center gap-6">
+                    <div className="flex flex-col items-center">
+                      <span className="font-heading text-heading-sm text-primary">
+                        {p.novosHoje}
+                      </span>
+                      <span className="text-body-sm text-muted">hoje</span>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <span className="font-heading text-heading-sm">
+                        {p.novosMes}
+                      </span>
+                      <span className="text-body-sm text-muted">mes</span>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <span className="font-heading text-heading-sm">
+                        {p.ativos}
+                      </span>
+                      <span className="text-body-sm text-muted">ativos</span>
                     </div>
                   </div>
-                ))}
-              </div>
-            </Card>
-          ))}
-        </div>
-
-        <TeamPieChart data={summary} />
+                </div>
+              ))}
+            </div>
+          </Card>
+        ))}
       </div>
 
-      {/* Top Vendas */}
+      {/* Pie Charts — 2 graficos por equipe (so mostra se tem acesso a 2 equipes) */}
+      {hasBothTeams && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {availableTeams.map((team) => (
+            <TeamPieChart
+              key={team}
+              team={team}
+              label={TEAM_LABELS[team] || team}
+              agents={agentsByTeam[team]}
+              color={TEAM_COLORS[team] || '#9566F2'}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Top Vendas — dados reais */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <SalesRanking title="Top Vendas — Hoje" data={salesData} />
-        <SalesRanking title="Top Vendas — Semana" data={salesData} />
+        <SalesRanking title="Top Vendas — Hoje" data={rankingHoje} />
+        <SalesRanking title="Top Vendas — Semana" data={rankingSemana} />
       </div>
 
       {/* Alertas Recentes */}
