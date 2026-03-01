@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import { Button, Input, Card } from '@/components/ui';
+import { APP_NAME, APP_SHORT_NAME, APP_DESCRIPTION } from '@/lib/constants';
 import type { User } from '@/types';
 
 interface LoginResponse {
@@ -43,11 +44,11 @@ export function LoginPage() {
       {/* Logo */}
       <div className="mb-8 flex flex-col items-center">
         <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-card bg-gradient-to-br from-primary to-accent-blue font-heading text-heading-lg text-white">
-          AK
+          {APP_SHORT_NAME}
         </div>
-        <h1 className="font-heading text-heading-lg">AssistenteKommo</h1>
+        <h1 className="font-heading text-heading-lg">{APP_NAME}</h1>
         <p className="mt-1 text-body-md text-muted">
-          Painel de gestao comercial inteligente
+          {APP_DESCRIPTION}
         </p>
       </div>
 

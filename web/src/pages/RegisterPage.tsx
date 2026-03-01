@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { CheckCircle2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Button, Input, Card } from '@/components/ui';
+import { APP_NAME, APP_SHORT_NAME } from '@/lib/constants';
 
 export function RegisterPage() {
   const [name, setName] = useState('');
@@ -35,9 +36,9 @@ export function RegisterPage() {
       {/* Logo */}
       <div className="mb-8 flex flex-col items-center">
         <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-card bg-gradient-to-br from-primary to-accent-blue font-heading text-heading-lg text-white">
-          AK
+          {APP_SHORT_NAME}
         </div>
-        <h1 className="font-heading text-heading-lg">AssistenteKommo</h1>
+        <h1 className="font-heading text-heading-lg">{APP_NAME}</h1>
         <p className="mt-1 text-body-md text-muted">Crie sua conta</p>
       </div>
 

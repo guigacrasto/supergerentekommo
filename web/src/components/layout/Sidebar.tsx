@@ -13,7 +13,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { usePipelines } from '@/hooks/usePipelines';
-import { TEAM_LABELS } from '@/lib/constants';
+import { TEAM_LABELS, APP_SHORT_NAME, APP_NAME } from '@/lib/constants';
 import { stripFunilPrefix } from '@/lib/utils';
 
 const NAV_ITEMS = [
@@ -42,10 +42,10 @@ export function Sidebar() {
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 py-5">
         <div className="flex h-9 w-9 items-center justify-center rounded-button bg-gradient-to-br from-primary to-accent-blue font-heading text-heading-sm text-white">
-          AK
+          {APP_SHORT_NAME}
         </div>
         <span className="font-heading text-heading-sm text-white">
-          AssistenteKommo
+          {APP_NAME}
         </span>
       </div>
 
