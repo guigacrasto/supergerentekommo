@@ -38,7 +38,7 @@ export function createServer(services: Record<TeamKey, KommoService>) {
   app.use("/api/chat", chatRouter(services));
   app.use("/api/insights", insightsRouter(services));
   app.use("/api/auth", authRouter());
-  app.use("/api/admin", adminRouter());
+  app.use("/api/admin", adminRouter(services));
   app.use("/api/oauth", oauthRouter(services));
 
   const webPath = join(__dirname, "../../web/dist");

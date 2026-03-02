@@ -1,8 +1,10 @@
 import { Router } from "express";
 import { supabase } from "../supabase.js";
 import { requireAdmin, AuthRequest } from "../middleware/requireAuth.js";
+import { TEAMS, TeamKey } from "../../config.js";
+import { KommoService } from "../../services/kommo.js";
 
-export function adminRouter(): Router {
+export function adminRouter(services: Record<TeamKey, KommoService>): Router {
   const router = Router();
   router.use(requireAdmin as any);
 
@@ -141,6 +143,108 @@ export function adminRouter(): Router {
     const { error } = await supabase.from("mentors").delete().eq("id", id);
     if (error) return res.status(500).json({ error: error.message });
     res.json({ ok: true });
+  });
+
+  // GET /api/admin/pipeline-visibility
+  router.get("/pipeline-visibility", async (_req, res) => {
+    try {
+      const allPipelines: Array<{
+        pipeline_id: number;
+        pipeline_name: string;
+        team: string;
+        visible: boolean;
+      }> = [];
+
+      // Fetch pipelines from Kommo API for each configured team
+      const teamKeys = (Object.keys(TEAMS) as TeamKey[]).filter(
+        (k) => TEAMS[k].subdomain && services[k]
+      );
+
+      const teamResults = await Promise.all(
+        teamKeys.map(async (team) => {
+          try {
+            const excludeNames = TEAMS[team].excludePipelineNames;
+            const pipelines = await services[team].getPipelines();
+            return pipelines
+              .filter((p: any) =>
+                !excludeNames.some((ex) =>
+                  p.name.toUpperCase().includes(ex.toUpperCase())
+                )
+              )
+              .map((p: any) => ({
+                pipeline_id: p.id as number,
+                pipeline_name: p.name as string,
+                team,
+              }));
+          } catch (err: any) {
+            console.error(`[Admin] Erro pipelines ${team}:`, err.message);
+            return [];
+          }
+        })
+      );
+
+      const apiPipelines = teamResults.flat();
+
+      // Fetch visibility overrides from Supabase
+      const { data: overrides } = await supabase
+        .from("pipeline_visibility")
+        .select("team, pipeline_id, visible");
+
+      const overrideMap = new Map<string, boolean>();
+      for (const o of overrides || []) {
+        overrideMap.set(`${o.team}:${o.pipeline_id}`, o.visible);
+      }
+
+      // Merge: default visible=true if no override
+      for (const p of apiPipelines) {
+        const key = `${p.team}:${p.pipeline_id}`;
+        allPipelines.push({
+          ...p,
+          visible: overrideMap.has(key) ? overrideMap.get(key)! : true,
+        });
+      }
+
+      res.json(allPipelines);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("[Admin] Pipeline visibility error:", error);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  // PUT /api/admin/pipeline-visibility
+  router.put("/pipeline-visibility", async (req, res) => {
+    const { team, pipeline_id, pipeline_name, visible } = req.body;
+
+    if (!team || !pipeline_id || typeof visible !== "boolean") {
+      res.status(400).json({ error: "team, pipeline_id e visible sao obrigatorios" });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("pipeline_visibility")
+        .upsert(
+          {
+            team,
+            pipeline_id,
+            pipeline_name: pipeline_name || "",
+            visible,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "team,pipeline_id" }
+        );
+
+      if (error) {
+        res.status(500).json({ error: error.message });
+        return;
+      }
+
+      res.json({ ok: true });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: message });
+    }
   });
 
   return router;
