@@ -318,7 +318,7 @@ export function clearInsightsCache(team?: TeamKey): void {
   for (const t of teams) {
     caches[t].data = null;
     caches[t].expiresAt = 0;
-    // Don't clear fetchPromise — if a fetch is in-flight, let it finish
+    caches[t].fetchPromise = null;
   }
   console.log(`[InsightsCache] Cache cleared for: ${teams.join(", ")}`);
 }

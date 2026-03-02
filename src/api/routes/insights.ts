@@ -46,6 +46,9 @@ export function insightsRouter(services: Record<TeamKey, KommoService>) {
     }
   });
 
+  const REFRESH_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+  const lastRefreshAt: Record<string, number> = {};
+
   router.post("/refresh", async (req: AuthRequest, res) => {
     const userTeams = req.userTeams || [];
 
@@ -53,6 +56,16 @@ export function insightsRouter(services: Record<TeamKey, KommoService>) {
       res.status(400).json({ error: "GEMINI_API_KEY nao configurada" });
       return;
     }
+
+    // Rate-limit: 1 refresh per 5 minutes per user
+    const userId = req.userId || "anonymous";
+    const now = Date.now();
+    if (lastRefreshAt[userId] && now - lastRefreshAt[userId] < REFRESH_COOLDOWN_MS) {
+      const waitSec = Math.ceil((REFRESH_COOLDOWN_MS - (now - lastRefreshAt[userId])) / 1000);
+      res.status(429).json({ error: `Aguarde ${waitSec}s antes de atualizar novamente.` });
+      return;
+    }
+    lastRefreshAt[userId] = now;
 
     try {
       // Clear cache for user's teams

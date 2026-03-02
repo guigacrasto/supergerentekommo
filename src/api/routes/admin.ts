@@ -215,9 +215,20 @@ export function adminRouter(services: Record<TeamKey, KommoService>): Router {
   // PUT /api/admin/pipeline-visibility
   router.put("/pipeline-visibility", async (req, res) => {
     const { team, pipeline_id, pipeline_name, visible } = req.body;
+    const validTeams = Object.keys(TEAMS) as TeamKey[];
 
     if (!team || !pipeline_id || typeof visible !== "boolean") {
       res.status(400).json({ error: "team, pipeline_id e visible sao obrigatorios" });
+      return;
+    }
+
+    if (!validTeams.includes(team)) {
+      res.status(400).json({ error: "Equipe invalida" });
+      return;
+    }
+
+    if (typeof pipeline_id !== "number" || !Number.isInteger(pipeline_id) || pipeline_id <= 0) {
+      res.status(400).json({ error: "pipeline_id invalido" });
       return;
     }
 
