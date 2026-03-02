@@ -8,7 +8,7 @@
     "dev": "tsx watch src/index.ts"
   },
   "dependencies": {
-    "@sg/shared": "*",
+    "@sg/shared": "file:../../packages/shared",
     "@supabase/supabase-js": "^2.98.0",
     "axios": "^1.6.0",
     "cors": "^2.8.6",

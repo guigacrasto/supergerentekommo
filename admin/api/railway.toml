@@ -1,5 +1,5 @@
 [build]
-buildCommand = "cd ../.. && npm install && cd admin/api && npm run build"
+buildCommand = "npm install --prefix ../../packages/shared && npm install && npm run build"
 
 [deploy]
 startCommand = "node dist/index.js"
