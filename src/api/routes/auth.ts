@@ -35,7 +35,7 @@ export function authRouter(): Router {
           role: "user",
           status: "pending",
         },
-        { onConflict: "id" }
+        { onConflict: "id", ignoreDuplicates: true }
       );
 
     if (profileError) {

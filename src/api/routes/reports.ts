@@ -36,7 +36,7 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
           byAgent[v.nome]["Total Leads"] += v.total;
           byAgent[v.nome]._won += v.ganhos;
           byAgent[v.nome]._lost += v.perdidos;
-          byAgent[v.nome].funnels[v.funil.replace("FUNIL ", "")] = v.ativos;
+          byAgent[v.nome].funnels[v.funil.replace(/^FUNIL\s+/i, "")] = v.ativos;
         }
       }
 
@@ -163,12 +163,19 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
 
       const activityResults = await Promise.all(
         userTeams.filter((t) => !!services[t]).map(async (team) => {
-          const crmMetrics = await getCrmMetrics(team, services[team]);
-          const activity = await getActivityMetrics(team, services[team], crmMetrics);
-          return { team, label: team === "azul" ? "Equipe Azul" : "Equipe Amarela", activity };
+          try {
+            const crmMetrics = await getCrmMetrics(team, services[team]);
+            const activity = await getActivityMetrics(team, services[team], crmMetrics);
+            return { team, label: team === "azul" ? "Equipe Azul" : "Equipe Amarela", activity };
+          } catch (teamErr: any) {
+            console.error(`[/api/reports/activity] Erro na equipe ${team}:`, teamErr.message);
+            return null;
+          }
         })
       );
-      result.push(...activityResults);
+      for (const r of activityResults) {
+        if (r) result.push(r);
+      }
 
       res.json(result);
     } catch (error: any) {

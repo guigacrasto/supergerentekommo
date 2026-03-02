@@ -25,7 +25,12 @@ export function insightsRouter(services: Record<TeamKey, KommoService>) {
 
       const teamResults = await Promise.all(
         userTeams.filter((t) => !!services[t]).map(async (team) => {
-          return getConversationInsights(team, services[team], genAI);
+          try {
+            return await getConversationInsights(team, services[team], genAI);
+          } catch (teamErr: any) {
+            console.error(`[Insights] Erro na equipe ${team}:`, teamErr.message);
+            return { data: [], processing: false };
+          }
         })
       );
       for (const result of teamResults) {
