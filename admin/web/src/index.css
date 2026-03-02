@@ -1,0 +1,24 @@
+@import 'tailwindcss';
+@config '../tailwind.config.ts';
+
+@layer base {
+  body {
+    @apply font-body text-body-md bg-primary-900 text-[#E0E3E9] overflow-auto;
+  }
+}
+
+@layer base {
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(149, 102, 242, 0.3);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(149, 102, 242, 0.5);
+  }
+}
