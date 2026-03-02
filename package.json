@@ -5,8 +5,7 @@
   "description": "MCP server for Kommo CRM integration",
   "main": "build/api/index.js",
   "scripts": {
-    "build": "tsc",
-    "build:all": "npm install --prefix web && npm run build --prefix web && npm run build",
+    "build": "npm install --prefix web && npm run build --prefix web && tsc",
     "start": "node build/api/index.js",
     "web": "node build/api/index.js",
     "mcp": "node build/mcp/index.js",
