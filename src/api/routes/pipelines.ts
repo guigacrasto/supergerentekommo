@@ -13,21 +13,23 @@ export function pipelinesRouter(services: Record<TeamKey, KommoService>) {
     try {
       const results: Array<{ id: number; name: string; team: TeamKey }> = [];
 
-      for (const team of userTeams) {
-        const service = services[team];
-        if (!service || !TEAMS[team].subdomain) continue;
-
-        try {
-          const excludeNames = TEAMS[team].excludePipelineNames;
-          const pipelines = await service.getPipelines();
-          const filtered = pipelines.filter(
-            (p: any) => !excludeNames.some((ex) => p.name.toUpperCase().includes(ex.toUpperCase()))
-          );
-          filtered.forEach((p: any) => results.push({ id: p.id, name: p.name, team }));
-        } catch (teamErr: any) {
-          console.error(`[/api/pipelines] Erro ao buscar pipelines da equipe ${team}:`, teamErr.message);
-        }
-      }
+      const teamResults = await Promise.all(
+        userTeams
+          .filter((t) => services[t] && TEAMS[t].subdomain)
+          .map(async (team) => {
+            try {
+              const excludeNames = TEAMS[team].excludePipelineNames;
+              const pipelines = await services[team].getPipelines();
+              return pipelines
+                .filter((p: any) => !excludeNames.some((ex) => p.name.toUpperCase().includes(ex.toUpperCase())))
+                .map((p: any) => ({ id: p.id, name: p.name, team }));
+            } catch (teamErr: any) {
+              console.error(`[/api/pipelines] Erro ao buscar pipelines da equipe ${team}:`, teamErr.message);
+              return [];
+            }
+          })
+      );
+      results.push(...teamResults.flat());
 
       res.json(results);
     } catch (error: any) {

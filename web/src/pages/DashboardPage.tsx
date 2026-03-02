@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { TrendingUp, Users, Target, AlertTriangle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { stripFunilPrefix } from '@/lib/utils';
 import { TEAM_LABELS } from '@/lib/constants';
+import { useFilterStore } from '@/stores/filterStore';
 import { PageSpinner, Card, CardHeader, CardTitle, Chip } from '@/components/ui';
 import { KPICard } from '@/components/features/dashboard/KPICard';
 import { TeamBarChart } from '@/components/features/dashboard/TeamBarChart';
@@ -68,6 +70,8 @@ const TEAM_COLORS: Record<string, string> = {
 type TeamFilter = '' | 'azul' | 'amarela';
 
 export function DashboardPage() {
+  const navigate = useNavigate();
+  const setAgentFilter = useFilterStore((s) => s.setAgentFilter);
   const [summary, setSummary] = useState<SummaryItem[]>([]);
   const [activity, setActivity] = useState<ActivityTeam[]>([]);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
@@ -231,9 +235,14 @@ export function DashboardPage() {
               </CardHeader>
               <div className="flex flex-col gap-3 p-5">
                 {pipes.map((p) => (
-                  <div
+                  <button
                     key={`${p.team}-${p.nome}`}
-                    className="flex items-center justify-between rounded-button border border-glass-border bg-surface-secondary p-4"
+                    type="button"
+                    onClick={() => {
+                      setAgentFilter('filterFunil', stripFunilPrefix(p.nome));
+                      navigate('/agents');
+                    }}
+                    className="flex w-full items-center justify-between rounded-button border border-glass-border bg-surface-secondary p-4 cursor-pointer transition-colors hover:bg-surface-secondary/80 hover:border-primary/40"
                   >
                     <span className="font-heading text-heading-sm">
                       {stripFunilPrefix(p.nome)}
@@ -258,7 +267,7 @@ export function DashboardPage() {
                         <span className="text-body-sm text-muted">ativos</span>
                       </div>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </Card>

@@ -16,6 +16,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { useSidebarStore } from '@/stores/sidebarStore';
+import { useFilterStore } from '@/stores/filterStore';
 import { usePipelines } from '@/hooks/usePipelines';
 import { TEAM_LABELS, APP_SHORT_NAME, APP_NAME } from '@/lib/constants';
 import { stripFunilPrefix } from '@/lib/utils';
@@ -31,6 +32,7 @@ const NAV_ITEMS = [
 export function Sidebar() {
   const { user, logout } = useAuthStore();
   const { collapsed, toggle } = useSidebarStore();
+  const setAgentFilter = useFilterStore((s) => s.setAgentFilter);
   const { byTeam } = usePipelines();
   const navigate = useNavigate();
   const [expandedTeams, setExpandedTeams] = useState<Record<string, boolean>>({});
@@ -131,9 +133,16 @@ export function Sidebar() {
                     <ul className="ml-4 space-y-0.5">
                       {teamPipelines.map((p) => (
                         <li key={p.id}>
-                          <span className="block rounded-button px-3 py-1.5 text-body-sm text-white/60">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAgentFilter('filterFunil', stripFunilPrefix(p.name));
+                              navigate('/agents');
+                            }}
+                            className="block w-full text-left rounded-button px-3 py-1.5 text-body-sm text-white/60 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+                          >
                             {stripFunilPrefix(p.name)}
-                          </span>
+                          </button>
                         </li>
                       ))}
                     </ul>

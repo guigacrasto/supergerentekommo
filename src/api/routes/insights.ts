@@ -23,11 +23,12 @@ export function insightsRouter(services: Record<TeamKey, KommoService>) {
       const allInsights = [];
       let anyProcessing = false;
 
-      for (const team of userTeams) {
-        const service = services[team];
-        if (!service) continue;
-
-        const result = await getConversationInsights(team, service, genAI);
+      const teamResults = await Promise.all(
+        userTeams.filter((t) => !!services[t]).map(async (team) => {
+          return getConversationInsights(team, services[team], genAI);
+        })
+      );
+      for (const result of teamResults) {
         allInsights.push(...result.data);
         if (result.processing) anyProcessing = true;
       }

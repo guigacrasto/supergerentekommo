@@ -21,12 +21,14 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
         funnels: Record<string, number>;
       }> = {};
 
-      for (const team of userTeams) {
-        const service = services[team];
-        if (!service) continue;
+      const allMetrics = await Promise.all(
+        userTeams.filter((t) => !!services[t]).map(async (team) => ({
+          team,
+          metrics: await getCrmMetrics(team, services[team]),
+        }))
+      );
 
-        const metrics = await getCrmMetrics(team, service);
-
+      for (const { metrics } of allMetrics) {
         for (const v of metrics.vendedores) {
           if (!byAgent[v.nome]) {
             byAgent[v.nome] = { Agente: v.nome, "Total Leads": 0, _won: 0, _lost: 0, funnels: {} };
@@ -66,6 +68,13 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
   router.get("/summary", async (req: AuthRequest, res) => {
     const userTeams = req.userTeams || [];
     try {
+      const allMetrics = await Promise.all(
+        userTeams.filter((t) => !!services[t]).map(async (team) => ({
+          team,
+          metrics: await getCrmMetrics(team, services[team]),
+        }))
+      );
+
       const result: Array<{
         nome: string;
         team: TeamKey;
@@ -74,11 +83,7 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
         ativos: number;
       }> = [];
 
-      for (const team of userTeams) {
-        const service = services[team];
-        if (!service) continue;
-
-        const metrics = await getCrmMetrics(team, service);
+      for (const { team, metrics } of allMetrics) {
         for (const funil of Object.values(metrics.funis)) {
           result.push({
             nome: funil.nome,
@@ -100,6 +105,13 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
   router.get("/dashboard", async (req: AuthRequest, res) => {
     const userTeams = req.userTeams || [];
     try {
+      const allMetrics = await Promise.all(
+        userTeams.filter((t) => !!services[t]).map(async (team) => ({
+          team,
+          metrics: await getCrmMetrics(team, services[team]),
+        }))
+      );
+
       const agentsByTeam: Record<string, Array<{
         nome: string;
         total: number;
@@ -109,13 +121,7 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
         ativos: number;
       }>> = {};
 
-      for (const team of userTeams) {
-        const service = services[team];
-        if (!service) continue;
-
-        const metrics = await getCrmMetrics(team, service);
-
-        // Agrupar vendedores por nome dentro desta equipe
+      for (const { team, metrics } of allMetrics) {
         const byAgent: Record<string, {
           nome: string;
           total: number;
@@ -155,14 +161,14 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
         activity: ActivityMetrics;
       }> = [];
 
-      for (const team of userTeams) {
-        const service = services[team];
-        if (!service) continue;
-
-        const crmMetrics = await getCrmMetrics(team, service);
-        const activity = await getActivityMetrics(team, service, crmMetrics);
-        result.push({ team, label: team === "azul" ? "Equipe Azul" : "Equipe Amarela", activity });
-      }
+      const activityResults = await Promise.all(
+        userTeams.filter((t) => !!services[t]).map(async (team) => {
+          const crmMetrics = await getCrmMetrics(team, services[team]);
+          const activity = await getActivityMetrics(team, services[team], crmMetrics);
+          return { team, label: team === "azul" ? "Equipe Azul" : "Equipe Amarela", activity };
+        })
+      );
+      result.push(...activityResults);
 
       res.json(result);
     } catch (error: any) {

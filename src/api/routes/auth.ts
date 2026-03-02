@@ -24,6 +24,24 @@ export function authRouter(): Router {
       return;
     }
 
+    // Garante que o perfil exista na tabela profiles (trigger pode falhar/não existir)
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .upsert(
+        {
+          id: data.user.id,
+          email,
+          name,
+          role: "user",
+          status: "pending",
+        },
+        { onConflict: "id" }
+      );
+
+    if (profileError) {
+      console.error("[Register] Erro ao criar perfil:", profileError.message);
+    }
+
     res.status(201).json({
       message: "Cadastro realizado. Aguarde aprovação do administrador.",
       userId: data.user.id,
