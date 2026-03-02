@@ -117,7 +117,6 @@ export class KommoService {
 
     /** Exchange an authorization code for access_token + refresh_token (OAuth step 2) */
     public async exchangeAuthCode(code: string): Promise<{ accessToken: string; refreshToken: string }> {
-        console.log(`[OAuth:${this.team}] Exchange attempt — subdomain=${this.config.subdomain}, clientId=${this.config.clientId}, redirectUri=${this.config.redirectUri}, secret=${this.config.clientSecret.slice(0, 6)}...${this.config.clientSecret.slice(-4)}, code=${code.slice(0, 20)}...`);
         const response = await axios.post(
             `https://${this.config.subdomain}.kommo.com/oauth2/access_token`,
             {
