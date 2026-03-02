@@ -50,7 +50,7 @@ export function authRouter(): Router {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("status, role, name")
+      .select("status, role, name, teams")
       .eq("id", data.user.id)
       .single();
 
@@ -65,7 +65,13 @@ export function authRouter(): Router {
 
     res.json({
       token: data.session.access_token,
-      user: { id: data.user.id, email: data.user.email, name: profile.name, role: profile.role },
+      user: {
+        id: data.user.id,
+        email: data.user.email,
+        name: profile.name,
+        role: profile.role,
+        teams: profile.teams || [],
+      },
     });
   });
 

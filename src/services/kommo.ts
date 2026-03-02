@@ -16,6 +16,7 @@ export class KommoService {
         this.currentAccessToken = config.accessToken ?? "";
         this.client = axios.create({
             baseURL: `https://${config.subdomain}.kommo.com/api/v4`,
+            timeout: 15_000, // 15 seconds — fail fast instead of hanging
             headers: {
                 "Content-Type": "application/json",
             },

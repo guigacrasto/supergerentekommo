@@ -2,6 +2,7 @@ import { TEAMS, validateConfig, PORT } from "../config.js";
 import { KommoService } from "../services/kommo.js";
 import { createServer } from "./server.js";
 import { getCrmMetrics } from "./cache/crm-cache.js";
+import { markCacheReady } from "./readiness.js";
 
 validateConfig();
 
@@ -32,13 +33,18 @@ app.listen(PORT, async () => {
   await refreshAllTokens();
   // Schedule proactive refresh every 20 hours
   setInterval(refreshAllTokens, REFRESH_INTERVAL_MS);
-  // Warm-up caches in background
-  getCrmMetrics("azul", services.azul).catch((e) =>
-    console.error("[WarmUp:azul] Erro ao pré-carregar cache:", e)
-  );
-  if (TEAMS.amarela.subdomain) {
-    getCrmMetrics("amarela", services.amarela).catch((e) =>
-      console.error("[WarmUp:amarela] Erro ao pré-carregar cache:", e)
-    );
+
+  // Warm-up caches synchronously — health only becomes ready after this
+  console.log("[WarmUp] Pré-carregando cache de métricas...");
+  try {
+    const warmups: Promise<unknown>[] = [getCrmMetrics("azul", services.azul)];
+    if (TEAMS.amarela.subdomain) {
+      warmups.push(getCrmMetrics("amarela", services.amarela));
+    }
+    await Promise.all(warmups);
+    console.log("[WarmUp] Cache aquecido com sucesso");
+  } catch (e) {
+    console.error("[WarmUp] Erro ao aquecer cache (continuando mesmo assim):", e);
   }
+  markCacheReady();
 });

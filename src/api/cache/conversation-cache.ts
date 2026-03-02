@@ -32,7 +32,8 @@ interface InsightsCacheEntry {
 
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 const MAX_CONVERSATIONS_PER_AGENT = 5;
-const MAX_LEADS_SAMPLE = 50;
+const MAX_LEADS_SAMPLE = 30; // reduced from 50 to limit API calls
+const CONCURRENCY = 5; // parallel notes/analysis workers
 
 const caches: Record<TeamKey, InsightsCacheEntry> = {
   azul: { data: null, expiresAt: 0, fetchPromise: null },
@@ -139,6 +140,24 @@ function scoreAndSelectLeads(allLeads: ActiveLead[], maxLeads: number): ActiveLe
   return selected;
 }
 
+/** Run async tasks with a concurrency limit */
+async function parallelMap<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = [];
+  let idx = 0;
+  async function worker() {
+    while (idx < items.length) {
+      const i = idx++;
+      results[i] = await fn(items[i]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()));
+  return results;
+}
+
 async function fetchInsights(
   team: TeamKey,
   service: KommoService,
@@ -148,7 +167,7 @@ async function fetchInsights(
 
   const metrics = await getCrmMetrics(team, service);
 
-  // Score ALL active leads by price + recency, pick top 50
+  // Score ALL active leads by price + recency, pick top leads
   const topLeads = scoreAndSelectLeads(metrics.activeLeads, MAX_LEADS_SAMPLE);
   console.log(`[ConversationCache:${team}] Selected ${topLeads.length} leads from ${metrics.activeLeads.length} active (scored by price + recency)`);
 
@@ -162,56 +181,75 @@ async function fetchInsights(
     leadsByAgent.get(agentName)!.push(lead);
   }
 
-  const agentSummaries: AgentInsightSummary[] = [];
-
+  // Flatten all leads to analyze with their agent info
+  const leadsToAnalyze: Array<{ lead: ActiveLead; agentName: string }> = [];
   for (const [agentName, leads] of leadsByAgent) {
     const sampled = leads.slice(0, MAX_CONVERSATIONS_PER_AGENT);
-    const insights: ConversationInsight[] = [];
-
     for (const lead of sampled) {
-      const notes = await service.getLeadNotesAll(lead.id);
+      leadsToAnalyze.push({ lead, agentName });
+    }
+  }
 
-      // Skip leads with no real messages (only analyze conversations with actual content)
-      const messageNotes = notes.filter(
-        (n) => (n.params?.text || n.text || "").trim().length > 0
-      );
-      if (messageNotes.length < 2) continue; // need at least 2 messages for a conversation
+  // Fetch notes + analyze in parallel with concurrency limit
+  const insightResults = await parallelMap(
+    leadsToAnalyze,
+    CONCURRENCY,
+    async ({ lead, agentName }): Promise<ConversationInsight | null> => {
+      try {
+        const notes = await service.getLeadNotesAll(lead.id);
+        const messageNotes = notes.filter(
+          (n) => (n.params?.text || n.text || "").trim().length > 0
+        );
+        if (messageNotes.length < 2) return null;
 
-      const analysis = await analyzeConversation(
-        genAI,
-        lead.titulo,
-        agentName,
-        messageNotes.map((n) => ({
-          text: n.params?.text || n.text || "",
-          created_at: n.created_at,
-          note_type: n.note_type,
-        }))
-      );
+        const analysis = await analyzeConversation(
+          genAI,
+          lead.titulo,
+          agentName,
+          messageNotes.map((n) => ({
+            text: n.params?.text || n.text || "",
+            created_at: n.created_at,
+            note_type: n.note_type,
+          }))
+        );
 
-      if (analysis) {
-        insights.push({
+        if (!analysis) return null;
+        return {
           leadId: lead.id,
           leadNome: lead.titulo,
           vendedor: agentName,
           ...analysis,
           analisadoEm: new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }),
-        });
+        };
+      } catch (err) {
+        console.error(`[ConversationCache:${team}] Error processing lead ${lead.id}:`, err);
+        return null;
       }
     }
+  );
 
-    if (insights.length > 0) {
-      const avgSentiment = insights.reduce((s, i) => s + i.sentimentScore, 0) / insights.length;
-      const avgQuality = insights.reduce((s, i) => s + i.qualityScore, 0) / insights.length;
+  // Group results back by agent
+  const insightsByAgent = new Map<string, ConversationInsight[]>();
+  for (const insight of insightResults) {
+    if (!insight) continue;
+    const arr = insightsByAgent.get(insight.vendedor) || [];
+    arr.push(insight);
+    insightsByAgent.set(insight.vendedor, arr);
+  }
 
-      agentSummaries.push({
-        nome: agentName,
-        team,
-        mediaSentimento: Math.round(avgSentiment * 10) / 10,
-        mediaQualidade: Math.round(avgQuality * 10) / 10,
-        totalAnalisados: insights.length,
-        insights,
-      });
-    }
+  const agentSummaries: AgentInsightSummary[] = [];
+  for (const [agentName, insights] of insightsByAgent) {
+    const avgSentiment = insights.reduce((s, i) => s + i.sentimentScore, 0) / insights.length;
+    const avgQuality = insights.reduce((s, i) => s + i.qualityScore, 0) / insights.length;
+
+    agentSummaries.push({
+      nome: agentName,
+      team,
+      mediaSentimento: Math.round(avgSentiment * 10) / 10,
+      mediaQualidade: Math.round(avgQuality * 10) / 10,
+      totalAnalisados: insights.length,
+      insights,
+    });
   }
 
   agentSummaries.sort((a, b) => b.mediaQualidade - a.mediaQualidade);

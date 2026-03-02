@@ -95,8 +95,8 @@ async function fetchActivity(
       if (pageTasks.length === 0) break;
       tasks.push(...pageTasks);
       if (pageTasks.length < taskLimit) break;
-      if (taskPage > 100) {
-        console.warn(`[ActivityCache:${team}] Reached 100 pages of tasks, stopping for safety.`);
+      if (taskPage >= 5) {
+        console.warn(`[ActivityCache:${team}] Reached 5 pages of tasks (${tasks.length} tasks), stopping.`);
         break;
       }
       taskPage++;

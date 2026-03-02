@@ -12,6 +12,7 @@ import { authRouter } from "./routes/auth.js";
 import { adminRouter } from "./routes/admin.js";
 import { oauthRouter } from "./routes/oauth.js";
 import { insightsRouter } from "./routes/insights.js";
+import { isCacheReady } from "./readiness.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -22,7 +23,14 @@ export function createServer(services: Record<TeamKey, KommoService>) {
   app.use(cors());
   app.use(express.json());
 
-  app.get("/health", (_req, res) => { res.json({ ok: true }); });
+  // Health check — returns 503 until cache is warm so Railway waits
+  app.get("/health", (_req, res) => {
+    if (isCacheReady()) {
+      res.json({ ok: true });
+    } else {
+      res.status(503).json({ ok: false, reason: "warming_cache" });
+    }
+  });
 
   app.use("/api/pipelines", pipelinesRouter(services));
   app.use("/api/leads", leadsRouter(services));
