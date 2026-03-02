@@ -22,7 +22,7 @@ export function oauthRouter(services: Record<TeamKey, KommoService>): Router {
       `&state=renew` +
       `&redirect_uri=${encodeURIComponent(config.redirectUri)}` +
       `&response_type=code`;
-    res.json({ authUrl });
+    res.json({ url: authUrl });
   });
 
   // POST /api/oauth/exchange?team=azul — exchange the authorization code for tokens
