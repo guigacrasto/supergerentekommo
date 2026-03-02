@@ -39,10 +39,5 @@
   },
   "engines": {
     "node": ">=20"
-  },
-  "workspaces": [
-    "packages/*",
-    "admin/api",
-    "admin/web"
-  ]
+  }
 }
