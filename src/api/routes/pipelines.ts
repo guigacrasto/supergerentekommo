@@ -2,6 +2,7 @@ import { Router } from "express";
 import { KommoService } from "../../services/kommo.js";
 import { TeamKey, TEAMS } from "../../config.js";
 import { requireAuth, AuthRequest } from "../middleware/requireAuth.js";
+import { supabase } from "../supabase.js";
 
 export function pipelinesRouter(services: Record<TeamKey, KommoService>) {
   const router = Router();
@@ -30,6 +31,25 @@ export function pipelinesRouter(services: Record<TeamKey, KommoService>) {
           })
       );
       results.push(...teamResults.flat());
+
+      // Filter by pipeline_visibility (admin bypasses)
+      if (req.userRole !== "admin") {
+        const { data: overrides } = await supabase
+          .from("pipeline_visibility")
+          .select("team, pipeline_id, visible")
+          .eq("visible", false);
+
+        if (overrides && overrides.length > 0) {
+          const hiddenSet = new Set(
+            overrides.map((o: any) => `${o.team}:${o.pipeline_id}`)
+          );
+          const filtered = results.filter(
+            (p: any) => !hiddenSet.has(`${p.team}:${p.id}`)
+          );
+          results.length = 0;
+          results.push(...filtered);
+        }
+      }
 
       res.json(results);
     } catch (error: any) {
