@@ -8,7 +8,6 @@ import { ChatPage } from '@/pages/ChatPage';
 import { AgentsPage } from '@/pages/AgentsPage';
 import { AlertsPage } from '@/pages/AlertsPage';
 import { InsightsPage } from '@/pages/InsightsPage';
-import { AdminPage } from '@/pages/AdminPage';
 
 export default function App() {
   return (
@@ -24,7 +23,6 @@ export default function App() {
           <Route path="/agents" element={<AgentsPage />} />
           <Route path="/alerts" element={<AlertsPage />} />
           <Route path="/insights" element={<InsightsPage />} />
-          <Route path="/admin" element={<AdminPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

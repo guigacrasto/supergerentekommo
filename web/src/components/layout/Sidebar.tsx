@@ -7,7 +7,6 @@ import {
   AlertTriangle,
   Brain,
   LogOut,
-  Settings,
   ChevronRight,
   ChevronDown,
   ChevronsLeft,
@@ -30,7 +29,7 @@ const NAV_ITEMS = [
 ] as const;
 
 export function Sidebar() {
-  const { user, logout } = useAuthStore();
+  const logout = useAuthStore((s) => s.logout);
   const { collapsed, toggle } = useSidebarStore();
   const setAgentFilter = useFilterStore((s) => s.setAgentFilter);
   const { byTeam } = usePipelines();
@@ -156,26 +155,6 @@ export function Sidebar() {
 
       {/* Footer */}
       <div className="border-t border-white/10 px-3 py-3 space-y-1">
-        {/* Admin link */}
-        {user?.role === 'admin' && (
-          <NavLink
-            to="/admin"
-            title={collapsed ? 'Admin' : undefined}
-            className={({ isActive }) =>
-              cn(
-                'flex items-center rounded-button px-3 py-2 text-body-md transition-colors',
-                collapsed ? 'justify-center' : 'gap-3',
-                isActive
-                  ? 'bg-primary/20 text-white'
-                  : 'text-white/70 hover:bg-white/10 hover:text-white'
-              )
-            }
-          >
-            <Settings className="h-5 w-5 shrink-0" />
-            {!collapsed && 'Admin'}
-          </NavLink>
-        )}
-
         {/* Logout */}
         <button
           onClick={handleLogout}
