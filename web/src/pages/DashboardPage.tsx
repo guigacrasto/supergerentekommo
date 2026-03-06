@@ -13,6 +13,7 @@ import { TeamBarChart } from '@/components/features/dashboard/TeamBarChart';
 import { SalesRanking } from '@/components/features/dashboard/SalesRanking';
 import { RecentAlerts } from '@/components/features/dashboard/RecentAlerts';
 import { TagFilter } from '@/components/features/filters/TagFilter';
+import { FunilFilter } from '@/components/features/filters/FunilFilter';
 
 interface SummaryItem {
   nome: string;
@@ -91,7 +92,6 @@ export function DashboardPage() {
   const selectedTags = useFilterStore((s) => s.selectedTags);
   const tagMode = useFilterStore((s) => s.tagMode);
   const selectedFunil = useFilterStore((s) => s.selectedFunil);
-  const setSelectedFunil = useFilterStore((s) => s.setSelectedFunil);
   const user = useAuthStore((s) => s.user);
   const { data: sseData, connected: sseConnected } = useSSE();
   const [summary, setSummary] = useState<SummaryItem[]>([]);
@@ -285,46 +285,28 @@ export function DashboardPage() {
       {/* Live timestamp indicator */}
       <LiveTimestamp timestamp={lastFetchTime} />
 
-      {/* Team filter tabs + Tag filter */}
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-4">
-          {hasMultipleTeams && (
-            <div className="flex items-center gap-2">
-              <Chip active={teamFilter === ''} onClick={() => setTeamFilter('')}>
-                Todas as Equipes
-              </Chip>
-              {userTeams.includes('azul') && (
-                <Chip active={teamFilter === 'azul'} onClick={() => setTeamFilter('azul')}>
-                  Equipe Azul
-                </Chip>
-              )}
-              {userTeams.includes('amarela') && (
-                <Chip active={teamFilter === 'amarela'} onClick={() => setTeamFilter('amarela')}>
-                  Equipe Amarela
-                </Chip>
-              )}
-            </div>
-          )}
-
-          <TagFilter />
-        </div>
-
-        {availableFunis.length > 1 && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <Chip active={effectiveFunil === ''} onClick={() => setSelectedFunil('')}>
-              Todos os Funis
+      {/* Team filter tabs + Tag filter + Funnel filter */}
+      <div className="flex flex-wrap items-center gap-4">
+        {hasMultipleTeams && (
+          <div className="flex items-center gap-2">
+            <Chip active={teamFilter === ''} onClick={() => setTeamFilter('')}>
+              Todas as Equipes
             </Chip>
-            {availableFunis.map((funil) => (
-              <Chip
-                key={funil}
-                active={effectiveFunil === funil}
-                onClick={() => setSelectedFunil(funil === effectiveFunil ? '' : funil)}
-              >
-                {funil}
+            {userTeams.includes('azul') && (
+              <Chip active={teamFilter === 'azul'} onClick={() => setTeamFilter('azul')}>
+                Equipe Azul
               </Chip>
-            ))}
+            )}
+            {userTeams.includes('amarela') && (
+              <Chip active={teamFilter === 'amarela'} onClick={() => setTeamFilter('amarela')}>
+                Equipe Amarela
+              </Chip>
+            )}
           </div>
         )}
+
+        <FunilFilter funis={availableFunis} />
+        <TagFilter />
       </div>
 
       {/* KPI Cards — show skeleton during loading */}

@@ -6,6 +6,8 @@ import { useFilterStore } from '@/stores/filterStore';
 import { Chip, LiveTimestamp } from '@/components/ui';
 import { KPICard } from '@/components/features/dashboard/KPICard';
 import { TagFilter } from '@/components/features/filters/TagFilter';
+import { FunilFilter } from '@/components/features/filters/FunilFilter';
+import { AgenteFilter } from '@/components/features/filters/AgenteFilter';
 
 interface DailyMetrics {
   team: string;
@@ -30,7 +32,6 @@ type TeamFilter = '' | 'azul' | 'amarela';
 export function DiarioPage() {
   const user = useAuthStore((s) => s.user);
   const selectedFunil = useFilterStore((s) => s.selectedFunil);
-  const setSelectedFunil = useFilterStore((s) => s.setSelectedFunil);
   const [data, setData] = useState<DailyMetrics[]>([]);
   const [funis, setFunis] = useState<string[]>([]);
   const [agentes, setAgentes] = useState<string[]>([]);
@@ -69,9 +70,6 @@ export function DiarioPage() {
 
   const filtered = teamFilter ? data.filter((d) => d.team === teamFilter) : data;
 
-  const effectiveFunil = funis.includes(selectedFunil) ? selectedFunil : '';
-  const effectiveAgente = agentes.includes(selectedAgente) ? selectedAgente : '';
-
   const totals = filtered.reduce(
     (acc, d) => ({
       leadsDia: acc.leadsDia + d.leadsDia,
@@ -96,74 +94,38 @@ export function DiarioPage() {
       <LiveTimestamp timestamp={lastFetchTime} />
 
       {/* Filters */}
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2">
-            <CalendarDays className="h-5 w-5 text-primary" />
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="rounded-button border border-glass-border bg-surface-secondary px-3 py-2 text-body-md text-foreground focus:outline-none focus:border-primary transition-colors"
-            />
-          </div>
-
-          {hasMultipleTeams && (
-            <div className="flex items-center gap-2">
-              <Chip active={teamFilter === ''} onClick={() => setTeamFilter('')}>
-                Todas
-              </Chip>
-              {userTeams.includes('azul') && (
-                <Chip active={teamFilter === 'azul'} onClick={() => setTeamFilter('azul')}>
-                  Azul
-                </Chip>
-              )}
-              {userTeams.includes('amarela') && (
-                <Chip active={teamFilter === 'amarela'} onClick={() => setTeamFilter('amarela')}>
-                  Amarela
-                </Chip>
-              )}
-            </div>
-          )}
-
-          <TagFilter />
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-2">
+          <CalendarDays className="h-5 w-5 text-primary" />
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="rounded-button border border-glass-border bg-surface-secondary px-3 py-2 text-body-md text-foreground focus:outline-none focus:border-primary transition-colors"
+          />
         </div>
 
-        {/* Funnel filter */}
-        {funis.length > 1 && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <Chip active={effectiveFunil === ''} onClick={() => setSelectedFunil('')}>
-              Todos os Funis
+        {hasMultipleTeams && (
+          <div className="flex items-center gap-2">
+            <Chip active={teamFilter === ''} onClick={() => setTeamFilter('')}>
+              Todas
             </Chip>
-            {funis.map((funil) => (
-              <Chip
-                key={funil}
-                active={effectiveFunil === funil}
-                onClick={() => setSelectedFunil(funil === effectiveFunil ? '' : funil)}
-              >
-                {funil}
+            {userTeams.includes('azul') && (
+              <Chip active={teamFilter === 'azul'} onClick={() => setTeamFilter('azul')}>
+                Azul
               </Chip>
-            ))}
+            )}
+            {userTeams.includes('amarela') && (
+              <Chip active={teamFilter === 'amarela'} onClick={() => setTeamFilter('amarela')}>
+                Amarela
+              </Chip>
+            )}
           </div>
         )}
 
-        {/* Agent filter */}
-        {agentes.length > 1 && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <Chip active={effectiveAgente === ''} onClick={() => setSelectedAgente('')}>
-              Todos os Agentes
-            </Chip>
-            {agentes.map((agente) => (
-              <Chip
-                key={agente}
-                active={effectiveAgente === agente}
-                onClick={() => setSelectedAgente(agente === effectiveAgente ? '' : agente)}
-              >
-                {agente}
-              </Chip>
-            ))}
-          </div>
-        )}
+        <FunilFilter funis={funis} />
+        <AgenteFilter agentes={agentes} selected={selectedAgente} onChange={setSelectedAgente} />
+        <TagFilter />
       </div>
 
       {/* KPI Cards — Row 1: Dia | Row 2: Mês */}
