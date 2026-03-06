@@ -33,6 +33,12 @@ function getToday(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function formatTMF(horas: number): string {
+  if (horas < 24) return `${horas.toFixed(1)}h`;
+  const dias = Math.round(horas / 24);
+  return `${dias}d`;
+}
+
 export function TMFPage() {
   const user = useAuthStore((s) => s.user);
   const [data, setData] = useState<TMFData | null>(null);
@@ -117,7 +123,7 @@ export function TMFPage() {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <KPICard
           label="TMF Geral"
-          value={data ? `${data.tmfGeralHoras.toFixed(1)}h` : undefined}
+          value={data ? formatTMF(data.tmfGeralHoras) : undefined}
           icon={Clock}
           accent="primary"
           loading={loading}
@@ -153,7 +159,7 @@ export function TMFPage() {
               <th className="px-4 py-3 text-left font-medium">Nome</th>
               <th className="px-4 py-3 text-right font-medium">Fech. Dia</th>
               <th className="px-4 py-3 text-right font-medium">Remarketing</th>
-              <th className="px-4 py-3 text-right font-medium">TMF (horas)</th>
+              <th className="px-4 py-3 text-right font-medium">TMF</th>
             </tr>
           </thead>
           <tbody>
@@ -193,7 +199,7 @@ export function TMFPage() {
                     {agente.remarketing}
                   </td>
                   <td className="border-t border-glass-border px-4 py-3 text-right text-body-md text-foreground">
-                    {agente.tmfHoras.toFixed(1)}
+                    {formatTMF(agente.tmfHoras)}
                   </td>
                 </tr>
               ))
