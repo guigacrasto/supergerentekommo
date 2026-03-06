@@ -41,8 +41,10 @@ function getToday(): string {
 
 function formatTMF(horas: number): string {
   if (horas < 24) return `${horas.toFixed(1)}h`;
-  const dias = Math.round(horas / 24);
-  return `${dias}d`;
+  const dias = Math.floor(horas / 24);
+  const horasRestantes = Math.round(horas % 24);
+  if (horasRestantes === 0) return `${dias}d`;
+  return `${dias}d ${horasRestantes}h`;
 }
 
 export function TMFPage() {

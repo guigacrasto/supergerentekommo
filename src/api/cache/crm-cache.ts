@@ -162,7 +162,7 @@ async function fetchAndCompute(team: TeamKey, service: KommoService): Promise<Cr
   }
 
   const [users, lossReasons, groups, ...leadsPerPipeline] = await Promise.all([
-    service.getUsers(),
+    service.getUsersWithGroups(),
     service.getLossReasons(),
     service.getGroups(),
     ...pipelines.map((p: any) => service.getLeads({ filter: { pipeline_id: p.id } })),
