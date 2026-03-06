@@ -92,19 +92,29 @@ const caches: Record<TeamKey, CacheEntry> = {
   amarela: { metrics: null, expiresAt: 0, fetchPromise: null },
 };
 
-function toConversao(ganhos: number, perdidos: number): string {
-  const total = ganhos + perdidos;
+function toConversao(ganhos: number, total: number): string {
   if (total === 0) return "0.0%";
   return ((ganhos / total) * 100).toFixed(1) + "%";
 }
 
+function getBrtDayStart(daysAgo: number): number {
+  const now = new Date();
+  const brt = new Date(now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+  brt.setHours(0, 0, 0, 0);
+  brt.setDate(brt.getDate() - daysAgo + 1);
+  const year = brt.getFullYear();
+  const month = String(brt.getMonth() + 1).padStart(2, '0');
+  const day = String(brt.getDate()).padStart(2, '0');
+  return new Date(`${year}-${month}-${day}T00:00:00-03:00`).getTime() / 1000;
+}
+
 function countPeriod(leads: any[], days: number): number {
-  const cutoff = Date.now() / 1000 - days * 86400;
+  const cutoff = getBrtDayStart(days);
   return leads.filter((l) => l.created_at >= cutoff).length;
 }
 
 function countWonPeriod(leads: any[], days: number): number {
-  const cutoff = Date.now() / 1000 - days * 86400;
+  const cutoff = getBrtDayStart(days);
   return leads.filter((l) => l.status_id === STATUS.WON && l.closed_at >= cutoff).length;
 }
 
@@ -159,7 +169,7 @@ async function fetchAndCompute(team: TeamKey, service: KommoService): Promise<Cr
       ganhos,
       perdidos,
       ativos,
-      conversao: toConversao(ganhos, perdidos),
+      conversao: toConversao(ganhos, leads.length),
       novosHoje: countPeriod(leads, 1),
       novosSemana: countPeriod(leads, 7),
       novosMes: countPeriod(leads, 30),
@@ -184,7 +194,7 @@ async function fetchAndCompute(team: TeamKey, service: KommoService): Promise<Cr
         ganhosSemana: countWonPeriod(mine, 7),
         perdidos,
         ativos: mine.length - ganhos - perdidos,
-        conversao: toConversao(ganhos, perdidos),
+        conversao: toConversao(ganhos, mine.length),
         novosSemana: countPeriod(mine, 7),
         novosMes: countPeriod(mine, 30),
       });
@@ -199,7 +209,7 @@ async function fetchAndCompute(team: TeamKey, service: KommoService): Promise<Cr
     ganhos: totalGanhos,
     perdidos: totalPerdidos,
     ativos: allLeads.length - totalGanhos - totalPerdidos,
-    conversao: toConversao(totalGanhos, totalPerdidos),
+    conversao: toConversao(totalGanhos, allLeads.length),
     novosHoje: countPeriod(allLeads, 1),
     novosSemana: countPeriod(allLeads, 7),
     novosMes: countPeriod(allLeads, 30),

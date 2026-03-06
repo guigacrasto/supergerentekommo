@@ -33,6 +33,17 @@ interface SSEActivity {
   }>;
 }
 
+interface SSEVendedor {
+  nome: string;
+  funil: string;
+  team: string;
+  total: number;
+  ganhos: number;
+  ganhosHoje: number;
+  ganhosSemana: number;
+  ativos: number;
+}
+
 interface SSETeamData {
   team: string;
   geral: {
@@ -42,6 +53,7 @@ interface SSETeamData {
   };
   summary: SSESummaryItem[];
   agents: SSEAgent[];
+  vendedores: SSEVendedor[];
   activity: SSEActivity | null;
   atualizadoEm: string;
 }

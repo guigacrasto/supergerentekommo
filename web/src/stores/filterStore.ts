@@ -13,6 +13,7 @@ interface FilterState {
   alertEquipeFilter: AlertEquipeFilter;
   selectedTags: number[];
   tagMode: 'or' | 'and';
+  selectedFunil: string;
   setAgentFilter: (key: 'filterAgente' | 'filterFunil' | 'filterEquipe', value: string) => void;
   setSort: (col: string) => void;
   setDateRange: (from: string, to: string) => void;
@@ -20,6 +21,7 @@ interface FilterState {
   setAlertEquipeFilter: (filter: AlertEquipeFilter) => void;
   setSelectedTags: (tags: number[]) => void;
   setTagMode: (mode: 'or' | 'and') => void;
+  setSelectedFunil: (funil: string) => void;
   clearTags: () => void;
   clearAgentFilters: () => void;
   clearDateRange: () => void;
@@ -45,6 +47,7 @@ export const useFilterStore = create<FilterState>((set) => ({
   alertEquipeFilter: 'todas',
   selectedTags: [],
   tagMode: 'or',
+  selectedFunil: '',
 
   setAgentFilter: (key, value) => set({ [key]: value }),
 
@@ -63,6 +66,8 @@ export const useFilterStore = create<FilterState>((set) => ({
   setSelectedTags: (selectedTags) => set({ selectedTags }),
 
   setTagMode: (tagMode) => set({ tagMode }),
+
+  setSelectedFunil: (selectedFunil) => set({ selectedFunil }),
 
   clearTags: () => set({ selectedTags: [] }),
 

@@ -61,6 +61,17 @@ interface DashboardAgent {
   ativos: number;
 }
 
+interface VendedorItem {
+  nome: string;
+  funil: string;
+  team: string;
+  total: number;
+  ganhos: number;
+  ganhosHoje: number;
+  ganhosSemana: number;
+  ativos: number;
+}
+
 interface DashboardData {
   agentsByTeam: Record<string, DashboardAgent[]>;
 }
@@ -79,9 +90,12 @@ export function DashboardPage() {
   const setAgentFilter = useFilterStore((s) => s.setAgentFilter);
   const selectedTags = useFilterStore((s) => s.selectedTags);
   const tagMode = useFilterStore((s) => s.tagMode);
+  const selectedFunil = useFilterStore((s) => s.selectedFunil);
+  const setSelectedFunil = useFilterStore((s) => s.setSelectedFunil);
   const user = useAuthStore((s) => s.user);
   const { data: sseData, connected: sseConnected } = useSSE();
   const [summary, setSummary] = useState<SummaryItem[]>([]);
+  const [vendedores, setVendedores] = useState<VendedorItem[]>([]);
   const [activity, setActivity] = useState<ActivityTeam[]>([]);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -98,10 +112,12 @@ export function DashboardPage() {
       // Single combined request instead of 3 parallel
       const res = await api.get<{
         summary: SummaryItem[];
+        vendedores: VendedorItem[];
         dashboard: DashboardData;
         activity: ActivityTeam[];
       }>(`/reports/all${tagQuery}`);
       setSummary(res.data.summary);
+      setVendedores(res.data.vendedores ?? []);
       setDashboard(res.data.dashboard);
       setActivity(res.data.activity);
       setLastFetchTime(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
@@ -119,6 +135,10 @@ export function DashboardPage() {
     // Derive summary from SSE
     const sseSummary: SummaryItem[] = sseData.teams.flatMap((t) => t.summary || []);
     setSummary(sseSummary);
+
+    // Derive vendedores from SSE
+    const sseVendedores: VendedorItem[] = sseData.teams.flatMap((t) => t.vendedores || []);
+    setVendedores(sseVendedores);
 
     // Derive dashboard agents from SSE
     const agentsByTeam: Record<string, DashboardAgent[]> = {};
@@ -153,12 +173,23 @@ export function DashboardPage() {
   }, [fetchData, sseConnected]);
 
   // Apply team filter to data sources
-  const filteredSummary = teamFilter
+  const teamFilteredSummary = teamFilter
     ? summary.filter((s) => s.team === teamFilter)
     : summary;
   const filteredActivity = teamFilter
     ? activity.filter((t) => t.team === teamFilter)
     : activity;
+
+  // Extract unique funnel names (from team-filtered summary)
+  const availableFunis = [...new Set(teamFilteredSummary.map((s) => stripFunilPrefix(s.nome)))].sort();
+
+  // Reset funnel filter if selected funnel is no longer available
+  const effectiveFunil = availableFunis.includes(selectedFunil) ? selectedFunil : '';
+
+  // Apply funnel filter
+  const filteredSummary = effectiveFunil
+    ? teamFilteredSummary.filter((s) => stripFunilPrefix(s.nome) === effectiveFunil)
+    : teamFilteredSummary;
 
   // KPI calculations (filtered)
   const totalNovosHoje = filteredSummary.reduce((sum, s) => sum + s.novosHoje, 0);
@@ -190,16 +221,47 @@ export function DashboardPage() {
   const allAlerts7d = filteredActivity.flatMap((t) => t.activity.leadsEmRisco7d);
   const allTarefas = filteredActivity.flatMap((t) => t.activity.tarefasVencidas);
 
-  // Dashboard data per team (filtered)
+  // Dashboard data per team (filtered by team + funnel)
   const agentsByTeam = dashboard?.agentsByTeam ?? {};
   const filteredAgentTeams = teamFilter
     ? Object.keys(agentsByTeam).filter((t) => t === teamFilter)
     : Object.keys(agentsByTeam);
 
-  // Rankings: agregar vendas (filtrado por equipe)
+  // When funnel is selected, re-aggregate agents from vendedores data
+  const funilFilteredAgentsByTeam: Record<string, DashboardAgent[]> = {};
+  if (effectiveFunil) {
+    const filtered = vendedores.filter((v) => {
+      const matchTeam = !teamFilter || v.team === teamFilter;
+      const matchFunil = stripFunilPrefix(v.funil) === effectiveFunil;
+      return matchTeam && matchFunil;
+    });
+    const byTeamAgent: Record<string, Record<string, DashboardAgent>> = {};
+    for (const v of filtered) {
+      if (!byTeamAgent[v.team]) byTeamAgent[v.team] = {};
+      if (!byTeamAgent[v.team][v.nome]) {
+        byTeamAgent[v.team][v.nome] = { nome: v.nome, total: 0, ganhos: 0, ganhosHoje: 0, ganhosSemana: 0, ativos: 0 };
+      }
+      const a = byTeamAgent[v.team][v.nome];
+      a.total += v.total;
+      a.ganhos += v.ganhos;
+      a.ganhosHoje += v.ganhosHoje;
+      a.ganhosSemana += v.ganhosSemana;
+      a.ativos += v.ativos;
+    }
+    for (const [team, agents] of Object.entries(byTeamAgent)) {
+      funilFilteredAgentsByTeam[team] = Object.values(agents).sort((a, b) => b.total - a.total);
+    }
+  }
+
+  const effectiveAgentsByTeam = effectiveFunil ? funilFilteredAgentsByTeam : agentsByTeam;
+  const effectiveAgentTeams = effectiveFunil
+    ? Object.keys(funilFilteredAgentsByTeam)
+    : filteredAgentTeams;
+
+  // Rankings: agregar vendas (filtrado por equipe + funil)
   const allAgentsMap: Record<string, { nome: string; ganhosHoje: number; ganhosSemana: number }> = {};
-  for (const team of filteredAgentTeams) {
-    for (const a of agentsByTeam[team] ?? []) {
+  for (const team of effectiveAgentTeams) {
+    for (const a of effectiveAgentsByTeam[team] ?? []) {
       if (!allAgentsMap[a.nome]) {
         allAgentsMap[a.nome] = { nome: a.nome, ganhosHoje: 0, ganhosSemana: 0 };
       }
@@ -224,26 +286,45 @@ export function DashboardPage() {
       <LiveTimestamp timestamp={lastFetchTime} />
 
       {/* Team filter tabs + Tag filter */}
-      <div className="flex flex-wrap items-center gap-4">
-        {hasMultipleTeams && (
-          <div className="flex items-center gap-2">
-            <Chip active={teamFilter === ''} onClick={() => setTeamFilter('')}>
-              Todas as Equipes
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-4">
+          {hasMultipleTeams && (
+            <div className="flex items-center gap-2">
+              <Chip active={teamFilter === ''} onClick={() => setTeamFilter('')}>
+                Todas as Equipes
+              </Chip>
+              {userTeams.includes('azul') && (
+                <Chip active={teamFilter === 'azul'} onClick={() => setTeamFilter('azul')}>
+                  Equipe Azul
+                </Chip>
+              )}
+              {userTeams.includes('amarela') && (
+                <Chip active={teamFilter === 'amarela'} onClick={() => setTeamFilter('amarela')}>
+                  Equipe Amarela
+                </Chip>
+              )}
+            </div>
+          )}
+
+          <TagFilter />
+        </div>
+
+        {availableFunis.length > 1 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <Chip active={effectiveFunil === ''} onClick={() => setSelectedFunil('')}>
+              Todos os Funis
             </Chip>
-            {userTeams.includes('azul') && (
-              <Chip active={teamFilter === 'azul'} onClick={() => setTeamFilter('azul')}>
-                Equipe Azul
+            {availableFunis.map((funil) => (
+              <Chip
+                key={funil}
+                active={effectiveFunil === funil}
+                onClick={() => setSelectedFunil(funil === effectiveFunil ? '' : funil)}
+              >
+                {funil}
               </Chip>
-            )}
-            {userTeams.includes('amarela') && (
-              <Chip active={teamFilter === 'amarela'} onClick={() => setTeamFilter('amarela')}>
-                Equipe Amarela
-              </Chip>
-            )}
+            ))}
           </div>
         )}
-
-        <TagFilter />
       </div>
 
       {/* KPI Cards — show skeleton during loading */}
@@ -355,14 +436,14 @@ export function DashboardPage() {
           <Skeleton className="h-5 w-32 mb-4" />
           <Skeleton className="h-48 w-full" />
         </Card>
-      ) : filteredAgentTeams.length > 0 ? (
+      ) : effectiveAgentTeams.length > 0 ? (
         <div className="flex flex-col gap-6">
-          {filteredAgentTeams.map((team) => (
+          {effectiveAgentTeams.map((team) => (
             <TeamBarChart
               key={team}
               team={team}
               label={TEAM_LABELS[team] || team}
-              agents={agentsByTeam[team]}
+              agents={effectiveAgentsByTeam[team]}
               color={TEAM_COLORS[team] || '#9566F2'}
             />
           ))}

@@ -87,8 +87,7 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
           const total = a["Total Leads"] || 1;
           const wonPct = ((a._won / total) * 100).toFixed(1);
           const lostPct = ((a._lost / total) * 100).toFixed(1);
-          const convBase = a._won + a._lost;
-          const convPct = convBase > 0 ? ((a._won / convBase) * 100).toFixed(1) : "0.0";
+          const convPct = total > 0 ? ((a._won / a["Total Leads"]) * 100).toFixed(1) : "0.0";
           return {
             Agente: a.Agente,
             "Total Leads": a["Total Leads"],
@@ -259,9 +258,6 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
         const perdidasDia = leads.filter((l) => l.status_id === STATUS_LOST && l.closed_at >= dayStart && l.closed_at <= dayEnd).length;
         const perdidasMes = leads.filter((l) => l.status_id === STATUS_LOST && l.closed_at >= monthStart && l.closed_at <= monthEnd).length;
 
-        const convBaseDia = vendasDia + perdidasDia;
-        const convBaseMes = vendasMes + perdidasMes;
-
         return {
           team,
           leadsDia,
@@ -270,8 +266,8 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
           vendasMes,
           perdidasDia,
           perdidasMes,
-          conversaoDia: convBaseDia > 0 ? ((vendasDia / convBaseDia) * 100).toFixed(1) + "%" : "0.0%",
-          conversaoMes: convBaseMes > 0 ? ((vendasMes / convBaseMes) * 100).toFixed(1) + "%" : "0.0%",
+          conversaoDia: leadsDia > 0 ? ((vendasDia / leadsDia) * 100).toFixed(1) + "%" : "0.0%",
+          conversaoMes: leadsMes > 0 ? ((vendasMes / leadsMes) * 100).toFixed(1) + "%" : "0.0%",
         };
       });
 
@@ -676,12 +672,24 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
             activity = await getActivityMetrics(team, services[team], metrics);
           } catch {}
 
-          return { team, summary, agents, activity };
+          const vendedores = metrics.vendedores.map((v) => ({
+            nome: v.nome,
+            funil: v.funil,
+            team,
+            total: v.total,
+            ganhos: v.ganhos,
+            ganhosHoje: v.ganhosHoje,
+            ganhosSemana: v.ganhosSemana,
+            ativos: v.ativos,
+          }));
+
+          return { team, summary, agents, vendedores, activity };
         })
       );
 
       // Flatten into the format DashboardPage expects
       const summary = teamsData.flatMap((t) => t.summary);
+      const vendedores = teamsData.flatMap((t) => t.vendedores);
       const agentsByTeam: Record<string, any[]> = {};
       const activityList: Array<{ team: string; label: string; activity: any }> = [];
       for (const t of teamsData) {
@@ -695,7 +703,7 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
         }
       }
 
-      res.json({ summary, dashboard: { agentsByTeam }, activity: activityList });
+      res.json({ summary, vendedores, dashboard: { agentsByTeam }, activity: activityList });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -758,11 +766,23 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
               activity = await getActivityMetrics(team, services[team], metrics);
             } catch {}
 
+            const vendedores = metrics.vendedores.map((v) => ({
+              nome: v.nome,
+              funil: v.funil,
+              team,
+              total: v.total,
+              ganhos: v.ganhos,
+              ganhosHoje: v.ganhosHoje,
+              ganhosSemana: v.ganhosSemana,
+              ativos: v.ativos,
+            }));
+
             return {
               team,
               geral: metrics.geral,
               summary,
               agents,
+              vendedores,
               activity,
               atualizadoEm: new Date().toISOString(),
             };

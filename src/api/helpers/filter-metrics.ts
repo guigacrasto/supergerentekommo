@@ -52,10 +52,16 @@ export function filterCrmMetrics(metrics: CrmMetrics, opts: FilterOptions): CrmM
   const STATUS_LOST = 143;
   const totalGanhos = filteredSnapshots.filter((l) => l.status_id === STATUS_WON).length;
   const totalPerdidos = filteredSnapshots.filter((l) => l.status_id === STATUS_LOST).length;
-  const convBase = totalGanhos + totalPerdidos;
 
   function countPeriod(leads: LeadSnapshot[], days: number): number {
-    const cutoff = Date.now() / 1000 - days * 86400;
+    const now = new Date();
+    const brt = new Date(now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+    brt.setHours(0, 0, 0, 0);
+    brt.setDate(brt.getDate() - days + 1);
+    const year = brt.getFullYear();
+    const month = String(brt.getMonth() + 1).padStart(2, '0');
+    const day = String(brt.getDate()).padStart(2, '0');
+    const cutoff = new Date(`${year}-${month}-${day}T00:00:00-03:00`).getTime() / 1000;
     return leads.filter((l) => l.created_at >= cutoff).length;
   }
 
@@ -64,7 +70,7 @@ export function filterCrmMetrics(metrics: CrmMetrics, opts: FilterOptions): CrmM
     ganhos: totalGanhos,
     perdidos: totalPerdidos,
     ativos: filteredSnapshots.length - totalGanhos - totalPerdidos,
-    conversao: convBase > 0 ? ((totalGanhos / convBase) * 100).toFixed(1) + "%" : "0.0%",
+    conversao: filteredSnapshots.length > 0 ? ((totalGanhos / filteredSnapshots.length) * 100).toFixed(1) + "%" : "0.0%",
     novosHoje: countPeriod(filteredSnapshots, 1),
     novosSemana: countPeriod(filteredSnapshots, 7),
     novosMes: countPeriod(filteredSnapshots, 30),

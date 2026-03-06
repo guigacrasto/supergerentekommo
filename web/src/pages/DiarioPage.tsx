@@ -64,13 +64,11 @@ export function DiarioPage() {
     { leadsDia: 0, leadsMes: 0, vendasDia: 0, vendasMes: 0, perdidasDia: 0, perdidasMes: 0 }
   );
 
-  const convBaseDia = totals.vendasDia + totals.perdidasDia;
-  const convBaseMes = totals.vendasMes + totals.perdidasMes;
-  const conversaoDia = convBaseDia > 0
-    ? ((totals.vendasDia / convBaseDia) * 100).toFixed(1) + '%'
+  const conversaoDia = totals.leadsDia > 0
+    ? ((totals.vendasDia / totals.leadsDia) * 100).toFixed(1) + '%'
     : '0.0%';
-  const conversaoMes = convBaseMes > 0
-    ? ((totals.vendasMes / convBaseMes) * 100).toFixed(1) + '%'
+  const conversaoMes = totals.leadsMes > 0
+    ? ((totals.vendasMes / totals.leadsMes) * 100).toFixed(1) + '%'
     : '0.0%';
 
   return (
