@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TrendingUp, Users, Target, AlertTriangle } from 'lucide-react';
 import { api } from '@/lib/api';
-import { stripFunilPrefix } from '@/lib/utils';
+import { stripFunilPrefix, buildTagParams } from '@/lib/utils';
 import { TEAM_LABELS } from '@/lib/constants';
 import { useFilterStore } from '@/stores/filterStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -76,6 +76,8 @@ type TeamFilter = '' | 'azul' | 'amarela';
 export function DashboardPage() {
   const navigate = useNavigate();
   const setAgentFilter = useFilterStore((s) => s.setAgentFilter);
+  const selectedTags = useFilterStore((s) => s.selectedTags);
+  const tagMode = useFilterStore((s) => s.tagMode);
   const user = useAuthStore((s) => s.user);
   const [summary, setSummary] = useState<SummaryItem[]>([]);
   const [activity, setActivity] = useState<ActivityTeam[]>([]);
@@ -90,10 +92,11 @@ export function DashboardPage() {
   const fetchData = useCallback(async (isBackground = false) => {
     try {
       if (!isBackground) setLoading(true);
+      const tagQuery = buildTagParams(selectedTags, tagMode);
       const [summaryRes, activityRes, dashboardRes] = await Promise.all([
-        api.get<SummaryItem[]>('/reports/summary'),
-        api.get<ActivityTeam[]>('/reports/activity'),
-        api.get<DashboardData>('/reports/dashboard'),
+        api.get<SummaryItem[]>(`/reports/summary${tagQuery}`),
+        api.get<ActivityTeam[]>(`/reports/activity${tagQuery}`),
+        api.get<DashboardData>(`/reports/dashboard${tagQuery}`),
       ]);
       setSummary(summaryRes.data);
       setActivity(activityRes.data);
@@ -104,7 +107,7 @@ export function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedTags, tagMode]);
 
   useEffect(() => {
     fetchData();

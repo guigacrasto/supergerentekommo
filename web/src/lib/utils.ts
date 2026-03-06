@@ -31,3 +31,11 @@ export function dateToUnix(dateStr: string): number {
 export function stripFunilPrefix(name: string): string {
   return name.replace(/^FUNIL\s+/i, '');
 }
+
+export function buildTagParams(selectedTags: number[], tagMode: 'or' | 'and'): string {
+  if (selectedTags.length === 0) return '';
+  const params = new URLSearchParams();
+  params.set('tags', selectedTags.join(','));
+  if (tagMode === 'and') params.set('tagMode', 'and');
+  return '?' + params.toString();
+}
