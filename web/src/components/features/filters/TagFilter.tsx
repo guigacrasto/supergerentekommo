@@ -15,6 +15,8 @@ export function TagFilter() {
   const [open, setOpen] = useState(false);
   const selectedTags = useFilterStore((s) => s.selectedTags);
   const setSelectedTags = useFilterStore((s) => s.setSelectedTags);
+  const tagMode = useFilterStore((s) => s.tagMode);
+  const setTagMode = useFilterStore((s) => s.setTagMode);
 
   useEffect(() => {
     api.get<TagItem[]>('/reports/tags')
@@ -67,6 +69,33 @@ export function TagFilter() {
               <X className="h-3.5 w-3.5" />
               Limpar filtro
             </button>
+          )}
+          {selectedTags.length > 0 && (
+            <div className="flex items-center gap-1 px-3 py-2 border-b border-glass-border">
+              <span className="text-body-sm text-muted mr-1">Modo:</span>
+              <button
+                onClick={() => setTagMode('or')}
+                className={cn(
+                  'px-2 py-0.5 rounded text-body-sm font-medium transition-colors cursor-pointer',
+                  tagMode === 'or'
+                    ? 'bg-primary text-white'
+                    : 'bg-surface-secondary text-muted hover:text-foreground'
+                )}
+              >
+                Qualquer
+              </button>
+              <button
+                onClick={() => setTagMode('and')}
+                className={cn(
+                  'px-2 py-0.5 rounded text-body-sm font-medium transition-colors cursor-pointer',
+                  tagMode === 'and'
+                    ? 'bg-primary text-white'
+                    : 'bg-surface-secondary text-muted hover:text-foreground'
+                )}
+              >
+                Todas
+              </button>
+            </div>
           )}
           {tags.map((tag) => (
             <label
