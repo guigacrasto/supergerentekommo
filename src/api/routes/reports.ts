@@ -226,6 +226,7 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
     const dateStr = typeof req.query.date === "string" ? req.query.date : "";
     const dateMatch = dateStr.match(/^\d{4}-\d{2}-\d{2}$/);
     const targetDate = dateMatch ? dateStr : new Date().toISOString().slice(0, 10);
+    const funilFilter = typeof req.query.funil === "string" ? req.query.funil : "";
 
     try {
       const [year, month] = targetDate.split("-").map(Number);
@@ -246,8 +247,29 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
 
       const allMetrics = await getFilteredMetrics(req);
 
+      // Collect all funnel names across teams
+      const funisSet = new Set<string>();
+      const pipelineNameToIds = new Map<string, Set<number>>();
+      for (const { metrics } of allMetrics) {
+        for (const [key, funil] of Object.entries(metrics.funis)) {
+          const cleanName = funil.nome.replace(/^FUNIL\s+/i, "");
+          funisSet.add(cleanName);
+          if (!pipelineNameToIds.has(cleanName)) pipelineNameToIds.set(cleanName, new Set());
+          pipelineNameToIds.get(cleanName)!.add(Number(key));
+        }
+      }
+      const funis = Array.from(funisSet).sort();
+
+      // Resolve pipeline IDs for funnel filter
+      const filterPipelineIds = funilFilter ? pipelineNameToIds.get(funilFilter) : null;
+
       const result = allMetrics.map(({ team, metrics }) => {
-        const leads = metrics.leadSnapshots;
+        let leads = metrics.leadSnapshots;
+
+        // Filter by pipeline if funnel is selected
+        if (filterPipelineIds) {
+          leads = leads.filter((l) => filterPipelineIds.has(l.pipeline_id));
+        }
 
         const leadsDia = leads.filter((l) => l.created_at >= dayStart && l.created_at <= dayEnd).length;
         const leadsMes = leads.filter((l) => l.created_at >= monthStart && l.created_at <= monthEnd).length;
@@ -271,7 +293,7 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
         };
       });
 
-      res.json(result);
+      res.json({ metrics: result, funis });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
