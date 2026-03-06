@@ -7,13 +7,15 @@ import { TEAM_LABELS } from '@/lib/constants';
 import { useFilterStore } from '@/stores/filterStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useSSE } from '@/hooks/useSSE';
-import { Card, CardHeader, CardTitle, Chip, Skeleton, LiveTimestamp } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Skeleton, LiveTimestamp } from '@/components/ui';
 import { KPICard } from '@/components/features/dashboard/KPICard';
 import { TeamBarChart } from '@/components/features/dashboard/TeamBarChart';
 import { SalesRanking } from '@/components/features/dashboard/SalesRanking';
 import { RecentAlerts } from '@/components/features/dashboard/RecentAlerts';
 import { TagFilter } from '@/components/features/filters/TagFilter';
 import { FunilFilter } from '@/components/features/filters/FunilFilter';
+import { TimeFilter } from '@/components/features/filters/TimeFilter';
+import { GroupFilter } from '@/components/features/filters/GroupFilter';
 
 interface SummaryItem {
   nome: string;
@@ -66,6 +68,7 @@ interface VendedorItem {
   nome: string;
   funil: string;
   team: string;
+  grupo: string;
   total: number;
   ganhos: number;
   ganhosHoje: number;
@@ -84,8 +87,6 @@ const TEAM_COLORS: Record<string, string> = {
 
 const REFRESH_INTERVAL_MS = 2 * 60 * 1000;
 
-type TeamFilter = '' | 'azul' | 'amarela';
-
 export function DashboardPage() {
   const navigate = useNavigate();
   const setAgentFilter = useFilterStore((s) => s.setAgentFilter);
@@ -99,27 +100,29 @@ export function DashboardPage() {
   const [activity, setActivity] = useState<ActivityTeam[]>([]);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [teamFilter, setTeamFilter] = useState<TeamFilter>('');
+  const [teamFilter, setTeamFilter] = useState('');
+  const [groupFilter, setGroupFilter] = useState('');
+  const [gruposByTeam, setGruposByTeam] = useState<Record<string, string[]>>({});
   const [lastFetchTime, setLastFetchTime] = useState<string>('');
 
   const userTeams = user?.teams ?? [];
-  const hasMultipleTeams = userTeams.length > 1;
 
   const fetchData = useCallback(async (isBackground = false) => {
     try {
       if (!isBackground) setLoading(true);
       const tagQuery = buildTagParams(selectedTags, tagMode);
-      // Single combined request instead of 3 parallel
       const res = await api.get<{
         summary: SummaryItem[];
         vendedores: VendedorItem[];
         dashboard: DashboardData;
         activity: ActivityTeam[];
+        gruposByTeam: Record<string, string[]>;
       }>(`/reports/all${tagQuery}`);
       setSummary(res.data.summary);
       setVendedores(res.data.vendedores ?? []);
       setDashboard(res.data.dashboard);
       setActivity(res.data.activity);
+      setGruposByTeam(res.data.gruposByTeam ?? {});
       setLastFetchTime(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     } catch (err) {
       console.error('[DashboardPage] Erro ao carregar dados:', err);
@@ -132,27 +135,29 @@ export function DashboardPage() {
   useEffect(() => {
     if (!sseData) return;
 
-    // Derive summary from SSE
     const sseSummary: SummaryItem[] = sseData.teams.flatMap((t) => t.summary || []);
     setSummary(sseSummary);
 
-    // Derive vendedores from SSE
     const sseVendedores: VendedorItem[] = sseData.teams.flatMap((t) => t.vendedores || []);
     setVendedores(sseVendedores);
 
-    // Derive dashboard agents from SSE
     const agentsByTeam: Record<string, DashboardAgent[]> = {};
     for (const t of sseData.teams) {
       agentsByTeam[t.team] = t.agents || [];
     }
     setDashboard({ agentsByTeam });
 
-    // Derive activity from SSE
+    const sseGrupos: Record<string, string[]> = {};
+    for (const t of sseData.teams) {
+      sseGrupos[t.team] = t.grupos || [];
+    }
+    setGruposByTeam(sseGrupos);
+
     const activityData: ActivityTeam[] = sseData.teams
       .filter((t) => t.activity)
       .map((t) => ({
         team: t.team,
-        label: t.team === 'azul' ? 'Equipe Azul' : 'Equipe Amarela',
+        label: TEAM_LABELS[t.team] || t.team,
         activity: t.activity!,
       }));
     setActivity(activityData);
@@ -162,15 +167,26 @@ export function DashboardPage() {
   }, [sseData]);
 
   useEffect(() => {
-    // Initial fetch (SSE takes a moment to connect)
     fetchData();
 
-    // Only poll if SSE is not connected (fallback)
     if (!sseConnected) {
       const interval = setInterval(() => fetchData(true), REFRESH_INTERVAL_MS);
       return () => clearInterval(interval);
     }
   }, [fetchData, sseConnected]);
+
+  // Collect available groups (from selected team or all teams)
+  const availableGroups: string[] = teamFilter
+    ? gruposByTeam[teamFilter] ?? []
+    : [...new Set(Object.values(gruposByTeam).flat())].sort();
+
+  // Reset group filter if not in available list
+  const effectiveGroup = availableGroups.includes(groupFilter) ? groupFilter : '';
+
+  // Get set of agent names that belong to the selected group
+  const groupAgentNames = effectiveGroup
+    ? new Set(vendedores.filter((v) => v.grupo === effectiveGroup).map((v) => v.nome))
+    : null;
 
   // Apply team filter to data sources
   const teamFilteredSummary = teamFilter
@@ -227,13 +243,14 @@ export function DashboardPage() {
     ? Object.keys(agentsByTeam).filter((t) => t === teamFilter)
     : Object.keys(agentsByTeam);
 
-  // When funnel is selected, re-aggregate agents from vendedores data
+  // When funnel or group is selected, re-aggregate agents from vendedores data
   const funilFilteredAgentsByTeam: Record<string, DashboardAgent[]> = {};
-  if (effectiveFunil) {
+  if (effectiveFunil || effectiveGroup) {
     const filtered = vendedores.filter((v) => {
       const matchTeam = !teamFilter || v.team === teamFilter;
-      const matchFunil = stripFunilPrefix(v.funil) === effectiveFunil;
-      return matchTeam && matchFunil;
+      const matchFunil = !effectiveFunil || stripFunilPrefix(v.funil) === effectiveFunil;
+      const matchGroup = !groupAgentNames || groupAgentNames.has(v.nome);
+      return matchTeam && matchFunil && matchGroup;
     });
     const byTeamAgent: Record<string, Record<string, DashboardAgent>> = {};
     for (const v of filtered) {
@@ -253,12 +270,12 @@ export function DashboardPage() {
     }
   }
 
-  const effectiveAgentsByTeam = effectiveFunil ? funilFilteredAgentsByTeam : agentsByTeam;
-  const effectiveAgentTeams = effectiveFunil
+  const effectiveAgentsByTeam = (effectiveFunil || effectiveGroup) ? funilFilteredAgentsByTeam : agentsByTeam;
+  const effectiveAgentTeams = (effectiveFunil || effectiveGroup)
     ? Object.keys(funilFilteredAgentsByTeam)
     : filteredAgentTeams;
 
-  // Rankings: agregar vendas (filtrado por equipe + funil)
+  // Rankings: agregar vendas (filtrado por time + funil)
   const allAgentsMap: Record<string, { nome: string; ganhosHoje: number; ganhosSemana: number }> = {};
   for (const team of effectiveAgentTeams) {
     for (const a of effectiveAgentsByTeam[team] ?? []) {
@@ -285,31 +302,15 @@ export function DashboardPage() {
       {/* Live timestamp indicator */}
       <LiveTimestamp timestamp={lastFetchTime} />
 
-      {/* Team filter tabs + Tag filter + Funnel filter */}
+      {/* Filters */}
       <div className="flex flex-wrap items-center gap-4">
-        {hasMultipleTeams && (
-          <div className="flex items-center gap-2">
-            <Chip active={teamFilter === ''} onClick={() => setTeamFilter('')}>
-              Todas as Equipes
-            </Chip>
-            {userTeams.includes('azul') && (
-              <Chip active={teamFilter === 'azul'} onClick={() => setTeamFilter('azul')}>
-                Equipe Azul
-              </Chip>
-            )}
-            {userTeams.includes('amarela') && (
-              <Chip active={teamFilter === 'amarela'} onClick={() => setTeamFilter('amarela')}>
-                Equipe Amarela
-              </Chip>
-            )}
-          </div>
-        )}
-
+        <TimeFilter teams={userTeams} selected={teamFilter} onChange={(t) => { setTeamFilter(t); setGroupFilter(''); }} />
+        <GroupFilter grupos={availableGroups} selected={effectiveGroup} onChange={setGroupFilter} />
         <FunilFilter funis={availableFunis} />
         <TagFilter />
       </div>
 
-      {/* KPI Cards — show skeleton during loading */}
+      {/* KPI Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KPICard
           label="Leads Novos Hoje"

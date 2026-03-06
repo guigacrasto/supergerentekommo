@@ -52,13 +52,13 @@ export function AgentFilters({
         {hasMultipleTeams && (
           <div className="flex-1 min-w-[160px]">
             <Select
-              label="Equipe"
+              label="Time"
               value={filterEquipe}
               onChange={(e) => setAgentFilter('filterEquipe', e.target.value)}
               options={[
-                { value: '', label: 'Todas' },
-                { value: 'azul', label: 'Equipe Azul' },
-                { value: 'amarela', label: 'Equipe Amarela' },
+                { value: '', label: 'Todos' },
+                { value: 'azul', label: 'Time Azul' },
+                { value: 'amarela', label: 'Time Amarelo' },
               ]}
             />
           </div>

@@ -239,5 +239,44 @@ export function adminRouter(services: Record<TeamKey, KommoService>) {
     }
   });
 
+  // PATCH /api/admin/users/:id/teams — Atualiza equipes de um usuario
+  router.patch("/users/:id/teams", async (req: AuthRequest, res) => {
+    if (req.userRole !== "admin") {
+      res.status(403).json({ error: "Acesso restrito a administradores." });
+      return;
+    }
+
+    const userId = req.params.id;
+    const { teams } = req.body;
+
+    if (!Array.isArray(teams)) {
+      res.status(400).json({ error: "Body deve conter teams (string[])." });
+      return;
+    }
+
+    // Validate team values
+    const validTeams = (Object.keys(TEAMS) as TeamKey[]).filter((k) => TEAMS[k].subdomain);
+    const filtered = teams.filter((t: string) => validTeams.includes(t as TeamKey));
+
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ teams: filtered })
+        .eq("id", userId);
+
+      if (error) {
+        console.error("[Admin] Erro ao atualizar equipes:", error.message);
+        res.status(500).json({ error: error.message });
+        return;
+      }
+
+      console.log(`[Admin] Equipes do usuario ${userId} atualizadas: [${filtered.join(", ")}]`);
+      res.json({ ok: true });
+    } catch (error: any) {
+      console.error("[Admin] Erro ao atualizar equipes:", error.message);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   return router;
 }

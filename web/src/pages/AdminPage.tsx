@@ -193,22 +193,52 @@ function UserFunnelPanel({
   user,
   pipelines,
   onSave,
+  onSaveTeams,
 }: {
   user: AdminUser;
   pipelines: AdminPipeline[];
   onSave: (userId: string, team: string, funnelIds: number[]) => Promise<void>;
+  onSaveTeams: (userId: string, teams: string[]) => Promise<void>;
 }) {
   const grouped = groupByTeam(pipelines);
+  const allTeamKeys = Object.keys(grouped);
   const [selected, setSelected] = useState<Record<string, Set<number>>>(() => {
     const init: Record<string, Set<number>> = {};
-    for (const team of Object.keys(grouped)) {
+    for (const team of allTeamKeys) {
       const allowed = user.allowed_funnels?.[team] ?? [];
       init[team] = new Set(allowed);
     }
     return init;
   });
+  const [userTeams, setUserTeams] = useState<Set<string>>(() => new Set(user.teams || []));
   const [saving, setSaving] = useState<string | null>(null);
   const [savedTeam, setSavedTeam] = useState<string | null>(null);
+  const [savingTeams, setSavingTeams] = useState(false);
+  const [savedTeams, setSavedTeams] = useState(false);
+
+  const toggleTeam = (team: string) => {
+    setUserTeams((prev) => {
+      const next = new Set(prev);
+      if (next.has(team)) {
+        next.delete(team);
+      } else {
+        next.add(team);
+      }
+      return next;
+    });
+    setSavedTeams(false);
+  };
+
+  const handleSaveTeams = async () => {
+    setSavingTeams(true);
+    try {
+      await onSaveTeams(user.id, Array.from(userTeams));
+      setSavedTeams(true);
+      setTimeout(() => setSavedTeams(false), 3000);
+    } finally {
+      setSavingTeams(false);
+    }
+  };
 
   const toggleFunnel = (team: string, pipelineId: number) => {
     setSelected((prev) => {
@@ -248,11 +278,54 @@ function UserFunnelPanel({
 
   return (
     <div className="mt-2 rounded-button border border-glass-border bg-surface p-4 space-y-4">
+      {/* Team access */}
+      <div>
+        <h5 className="font-heading text-body-sm font-semibold uppercase tracking-wider text-muted mb-2">
+          Acesso a Times
+        </h5>
+        <div className="flex items-center gap-3 flex-wrap">
+          {allTeamKeys.map((team) => (
+            <label
+              key={team}
+              className={cn(
+                'flex items-center gap-2 rounded-button px-3 py-2 text-body-sm cursor-pointer transition-colors',
+                userTeams.has(team)
+                  ? 'bg-primary/10 text-foreground font-medium'
+                  : 'text-muted hover:bg-surface-secondary'
+              )}
+            >
+              <input
+                type="checkbox"
+                checked={userTeams.has(team)}
+                onChange={() => toggleTeam(team)}
+                className="h-4 w-4 rounded border-glass-border bg-surface-secondary text-primary focus:ring-primary accent-primary"
+              />
+              {TEAM_LABELS[team] || team}
+            </label>
+          ))}
+          <Button
+            size="sm"
+            onClick={handleSaveTeams}
+            loading={savingTeams}
+            disabled={savingTeams}
+          >
+            Salvar Times
+          </Button>
+          {savedTeams && (
+            <span className="inline-flex items-center gap-1 rounded-badge bg-success/10 px-2 py-1 text-body-sm text-success">
+              <Check className="h-3.5 w-3.5" />
+              Salvo
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Funnel permissions per team */}
       {Object.entries(grouped).map(([team, teamPipelines]) => (
         <div key={team}>
           <div className="flex items-center justify-between mb-2">
             <h5 className="font-heading text-body-sm font-semibold uppercase tracking-wider text-muted">
-              {TEAM_LABELS[team] || team}
+              Funis — {TEAM_LABELS[team] || team}
             </h5>
             <div className="flex items-center gap-2">
               <button
@@ -319,11 +392,13 @@ function UsersSection({
   pipelines,
   loading,
   onSaveFunnels,
+  onSaveTeams,
 }: {
   users: AdminUser[];
   pipelines: AdminPipeline[];
   loading: boolean;
   onSaveFunnels: (userId: string, team: string, funnelIds: number[]) => Promise<void>;
+  onSaveTeams: (userId: string, teams: string[]) => Promise<void>;
 }) {
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
 
@@ -367,7 +442,7 @@ function UsersSection({
               <th className="px-4 py-3 text-left font-medium">Email</th>
               <th className="px-4 py-3 text-left font-medium">Perfil</th>
               <th className="px-4 py-3 text-left font-medium">Status</th>
-              <th className="px-4 py-3 text-left font-medium">Equipes</th>
+              <th className="px-4 py-3 text-left font-medium">Times</th>
               <th className="px-4 py-3 text-center font-medium">Funis</th>
             </tr>
           </thead>
@@ -469,6 +544,7 @@ function UsersSection({
                             user={user}
                             pipelines={pipelines}
                             onSave={onSaveFunnels}
+                            onSaveTeams={onSaveTeams}
                           />
                         </div>
                       )}
@@ -536,6 +612,17 @@ export function AdminPage() {
     }
   };
 
+  const handleSaveTeams = async (userId: string, teams: string[]) => {
+    try {
+      await api.patch(`/admin/users/${userId}/teams`, { teams });
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, teams } : u))
+      );
+    } catch (err) {
+      console.error('[AdminPage] Erro ao salvar equipes:', err);
+    }
+  };
+
   const handleSaveFunnels = async (
     userId: string,
     team: string,
@@ -600,6 +687,7 @@ export function AdminPage() {
         pipelines={pipelines}
         loading={loadingUsers}
         onSaveFunnels={handleSaveFunnels}
+        onSaveTeams={handleSaveTeams}
       />
     </div>
   );

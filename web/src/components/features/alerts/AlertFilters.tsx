@@ -31,7 +31,7 @@ export function AlertFilters() {
         ))}
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-label text-muted-light mr-1">Equipe:</span>
+        <span className="text-label text-muted-light mr-1">Time:</span>
         {equipeTypes.map(({ value, label }) => (
           <Chip
             key={value}

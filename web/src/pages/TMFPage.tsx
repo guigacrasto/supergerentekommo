@@ -3,11 +3,13 @@ import { CalendarDays, Clock, Zap, RefreshCw, Percent } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import { useFilterStore } from '@/stores/filterStore';
-import { Chip, Skeleton, LiveTimestamp } from '@/components/ui';
+import { Skeleton, LiveTimestamp } from '@/components/ui';
 import { KPICard } from '@/components/features/dashboard/KPICard';
 import { TagFilter } from '@/components/features/filters/TagFilter';
 import { FunilFilter } from '@/components/features/filters/FunilFilter';
 import { AgenteFilter } from '@/components/features/filters/AgenteFilter';
+import { TimeFilter } from '@/components/features/filters/TimeFilter';
+import { GroupFilter } from '@/components/features/filters/GroupFilter';
 
 interface TMFAgente {
   nome: string;
@@ -24,9 +26,8 @@ interface TMFData {
   porAgente: TMFAgente[];
   funis: string[];
   agentes: string[];
+  grupos: string[];
 }
-
-type TeamFilter = '' | 'azul' | 'amarela';
 
 function getDefaultFrom(): string {
   const d = new Date();
@@ -49,22 +50,23 @@ export function TMFPage() {
   const selectedFunil = useFilterStore((s) => s.selectedFunil);
   const [data, setData] = useState<TMFData | null>(null);
   const [selectedAgente, setSelectedAgente] = useState('');
+  const [groupFilter, setGroupFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [from, setFrom] = useState(getDefaultFrom);
   const [to, setTo] = useState(getToday);
-  const [teamFilter, setTeamFilter] = useState<TeamFilter>('');
+  const [teamFilter, setTeamFilter] = useState('');
   const [lastFetchTime, setLastFetchTime] = useState('');
 
   const userTeams = user?.teams ?? [];
-  const hasMultipleTeams = userTeams.length > 1;
 
-  const fetchData = useCallback(async (fromDate: string, toDate: string, funil: string, agente: string, team: string) => {
+  const fetchData = useCallback(async (fromDate: string, toDate: string, funil: string, agente: string, team: string, group: string) => {
     try {
       setLoading(true);
       const params: Record<string, string> = { from: fromDate, to: toDate };
       if (funil) params.funil = funil;
       if (agente) params.agente = agente;
       if (team) params.team = team;
+      if (group) params.group = group;
       const res = await api.get<TMFData>('/reports/tmf', { params });
       setData(res.data);
       setLastFetchTime(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
@@ -76,13 +78,13 @@ export function TMFPage() {
   }, []);
 
   useEffect(() => {
-    fetchData(from, to, selectedFunil, selectedAgente, teamFilter);
-  }, [from, to, selectedFunil, selectedAgente, teamFilter, fetchData]);
+    fetchData(from, to, selectedFunil, selectedAgente, teamFilter, groupFilter);
+  }, [from, to, selectedFunil, selectedAgente, teamFilter, groupFilter, fetchData]);
 
   const funis = data?.funis ?? [];
   const agentes = data?.agentes ?? [];
+  const grupos = data?.grupos ?? [];
 
-  // Sort agents by TMF ascending
   const sortedAgentes = data?.porAgente
     ? [...data.porAgente].sort((a, b) => a.tmfHoras - b.tmfHoras)
     : [];
@@ -110,24 +112,8 @@ export function TMFPage() {
           />
         </div>
 
-        {hasMultipleTeams && (
-          <div className="flex items-center gap-2">
-            <Chip active={teamFilter === ''} onClick={() => setTeamFilter('')}>
-              Todas
-            </Chip>
-            {userTeams.includes('azul') && (
-              <Chip active={teamFilter === 'azul'} onClick={() => setTeamFilter('azul')}>
-                Azul
-              </Chip>
-            )}
-            {userTeams.includes('amarela') && (
-              <Chip active={teamFilter === 'amarela'} onClick={() => setTeamFilter('amarela')}>
-                Amarela
-              </Chip>
-            )}
-          </div>
-        )}
-
+        <TimeFilter teams={userTeams} selected={teamFilter} onChange={(t) => { setTeamFilter(t); setGroupFilter(''); }} />
+        <GroupFilter grupos={grupos} selected={groupFilter} onChange={setGroupFilter} />
         <FunilFilter funis={funis} />
         <AgenteFilter agentes={agentes} selected={selectedAgente} onChange={setSelectedAgente} />
         <TagFilter />

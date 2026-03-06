@@ -97,6 +97,8 @@ export function filterCrmMetrics(metrics: CrmMetrics, opts: FilterOptions): CrmM
       Object.entries(metrics.pipelineNames).filter(([id]) => allowedPipelineIds.has(Number(id)))
     ),
     userNames: metrics.userNames,
+    userGroups: metrics.userGroups,
+    lossReasonNames: metrics.lossReasonNames,
     allTags,
     atualizadoEm: metrics.atualizadoEm,
   };

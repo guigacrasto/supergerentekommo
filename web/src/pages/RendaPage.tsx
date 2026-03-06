@@ -2,8 +2,10 @@ import { useEffect, useState, useCallback } from 'react';
 import { CalendarDays } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
-import { Chip, Skeleton, LiveTimestamp } from '@/components/ui';
+import { Skeleton, LiveTimestamp } from '@/components/ui';
 import { TagFilter } from '@/components/features/filters/TagFilter';
+import { TimeFilter } from '@/components/features/filters/TimeFilter';
+import { GroupFilter } from '@/components/features/filters/GroupFilter';
 
 interface IncomeRow {
   faixa: string;
@@ -15,9 +17,8 @@ interface IncomeRow {
 
 interface IncomeData {
   faixas: IncomeRow[];
+  grupos: string[];
 }
-
-type TeamFilter = '' | 'azul' | 'amarela';
 
 function getDefaultFrom(): string {
   const d = new Date();
@@ -35,18 +36,19 @@ export function RendaPage() {
   const [loading, setLoading] = useState(true);
   const [from, setFrom] = useState(getDefaultFrom);
   const [to, setTo] = useState(getToday);
-  const [teamFilter, setTeamFilter] = useState<TeamFilter>('');
+  const [teamFilter, setTeamFilter] = useState('');
+  const [groupFilter, setGroupFilter] = useState('');
   const [lastFetchTime, setLastFetchTime] = useState('');
 
   const userTeams = user?.teams ?? [];
-  const hasMultipleTeams = userTeams.length > 1;
 
-  const fetchData = useCallback(async (fromDate: string, toDate: string) => {
+  const fetchData = useCallback(async (fromDate: string, toDate: string, team: string, group: string) => {
     try {
       setLoading(true);
-      const res = await api.get<IncomeData>('/reports/income', {
-        params: { from: fromDate, to: toDate },
-      });
+      const params: Record<string, string> = { from: fromDate, to: toDate };
+      if (team) params.team = team;
+      if (group) params.group = group;
+      const res = await api.get<IncomeData>('/reports/income', { params });
       setData(res.data);
       setLastFetchTime(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     } catch (err) {
@@ -57,16 +59,17 @@ export function RendaPage() {
   }, []);
 
   useEffect(() => {
-    fetchData(from, to);
-  }, [from, to, fetchData]);
+    fetchData(from, to, teamFilter, groupFilter);
+  }, [from, to, teamFilter, groupFilter, fetchData]);
 
   const faixas = data?.faixas ?? [];
+  const grupos = data?.grupos ?? [];
 
   return (
     <div className="flex flex-col gap-6">
       <LiveTimestamp timestamp={lastFetchTime} />
 
-      {/* Date range + Team filter */}
+      {/* Filters */}
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
           <CalendarDays className="h-5 w-5 text-primary" />
@@ -85,24 +88,8 @@ export function RendaPage() {
           />
         </div>
 
-        {hasMultipleTeams && (
-          <div className="flex items-center gap-2">
-            <Chip active={teamFilter === ''} onClick={() => setTeamFilter('')}>
-              Todas
-            </Chip>
-            {userTeams.includes('azul') && (
-              <Chip active={teamFilter === 'azul'} onClick={() => setTeamFilter('azul')}>
-                Azul
-              </Chip>
-            )}
-            {userTeams.includes('amarela') && (
-              <Chip active={teamFilter === 'amarela'} onClick={() => setTeamFilter('amarela')}>
-                Amarela
-              </Chip>
-            )}
-          </div>
-        )}
-
+        <TimeFilter teams={userTeams} selected={teamFilter} onChange={(t) => { setTeamFilter(t); setGroupFilter(''); }} />
+        <GroupFilter grupos={grupos} selected={groupFilter} onChange={setGroupFilter} />
         <TagFilter />
       </div>
 

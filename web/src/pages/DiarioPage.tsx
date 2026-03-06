@@ -3,11 +3,13 @@ import { CalendarDays, Users, TrendingUp, Target, Percent } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import { useFilterStore } from '@/stores/filterStore';
-import { Chip, LiveTimestamp } from '@/components/ui';
+import { LiveTimestamp } from '@/components/ui';
 import { KPICard } from '@/components/features/dashboard/KPICard';
 import { TagFilter } from '@/components/features/filters/TagFilter';
 import { FunilFilter } from '@/components/features/filters/FunilFilter';
 import { AgenteFilter } from '@/components/features/filters/AgenteFilter';
+import { TimeFilter } from '@/components/features/filters/TimeFilter';
+import { GroupFilter } from '@/components/features/filters/GroupFilter';
 
 interface DailyMetrics {
   team: string;
@@ -25,9 +27,8 @@ interface DailyResponse {
   metrics: DailyMetrics[];
   funis: string[];
   agentes: string[];
+  grupos: string[];
 }
-
-type TeamFilter = '' | 'azul' | 'amarela';
 
 export function DiarioPage() {
   const user = useAuthStore((s) => s.user);
@@ -35,27 +36,30 @@ export function DiarioPage() {
   const [data, setData] = useState<DailyMetrics[]>([]);
   const [funis, setFunis] = useState<string[]>([]);
   const [agentes, setAgentes] = useState<string[]>([]);
+  const [grupos, setGrupos] = useState<string[]>([]);
   const [selectedAgente, setSelectedAgente] = useState('');
+  const [groupFilter, setGroupFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(() =>
     new Date().toISOString().slice(0, 10)
   );
-  const [teamFilter, setTeamFilter] = useState<TeamFilter>('');
+  const [teamFilter, setTeamFilter] = useState('');
   const [lastFetchTime, setLastFetchTime] = useState('');
 
   const userTeams = user?.teams ?? [];
-  const hasMultipleTeams = userTeams.length > 1;
 
-  const fetchData = useCallback(async (date: string, funil: string, agente: string) => {
+  const fetchData = useCallback(async (date: string, funil: string, agente: string, group: string) => {
     try {
       setLoading(true);
       const params = new URLSearchParams({ date });
       if (funil) params.set('funil', funil);
       if (agente) params.set('agente', agente);
+      if (group) params.set('group', group);
       const res = await api.get<DailyResponse>(`/reports/daily?${params.toString()}`);
       setData(res.data.metrics);
       setFunis(res.data.funis ?? []);
       setAgentes(res.data.agentes ?? []);
+      setGrupos(res.data.grupos ?? []);
       setLastFetchTime(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     } catch (err) {
       console.error('[DiarioPage] Erro ao carregar dados:', err);
@@ -65,8 +69,8 @@ export function DiarioPage() {
   }, []);
 
   useEffect(() => {
-    fetchData(selectedDate, selectedFunil, selectedAgente);
-  }, [selectedDate, selectedFunil, selectedAgente, fetchData]);
+    fetchData(selectedDate, selectedFunil, selectedAgente, groupFilter);
+  }, [selectedDate, selectedFunil, selectedAgente, groupFilter, fetchData]);
 
   const filtered = teamFilter ? data.filter((d) => d.team === teamFilter) : data;
 
@@ -105,24 +109,8 @@ export function DiarioPage() {
           />
         </div>
 
-        {hasMultipleTeams && (
-          <div className="flex items-center gap-2">
-            <Chip active={teamFilter === ''} onClick={() => setTeamFilter('')}>
-              Todas
-            </Chip>
-            {userTeams.includes('azul') && (
-              <Chip active={teamFilter === 'azul'} onClick={() => setTeamFilter('azul')}>
-                Azul
-              </Chip>
-            )}
-            {userTeams.includes('amarela') && (
-              <Chip active={teamFilter === 'amarela'} onClick={() => setTeamFilter('amarela')}>
-                Amarela
-              </Chip>
-            )}
-          </div>
-        )}
-
+        <TimeFilter teams={userTeams} selected={teamFilter} onChange={(t) => { setTeamFilter(t); setGroupFilter(''); }} />
+        <GroupFilter grupos={grupos} selected={groupFilter} onChange={setGroupFilter} />
         <FunilFilter funis={funis} />
         <AgenteFilter agentes={agentes} selected={selectedAgente} onChange={setSelectedAgente} />
         <TagFilter />

@@ -15,7 +15,7 @@ export interface TeamConfig {
 
 export const TEAMS: Record<TeamKey, TeamConfig> = {
   azul: {
-    label: "Equipe Azul",
+    label: "Time Azul",
     subdomain: process.env.KOMMO_SUBDOMAIN || "",
     clientId: process.env.KOMMO_CLIENT_ID || "",
     clientSecret: process.env.KOMMO_CLIENT_SECRET || "",
@@ -24,7 +24,7 @@ export const TEAMS: Record<TeamKey, TeamConfig> = {
     excludePipelineNames: [],
   },
   amarela: {
-    label: "Equipe Amarela",
+    label: "Time Amarelo",
     subdomain: process.env.KOMMO_AMARELA_SUBDOMAIN || "",
     clientId: process.env.KOMMO_AMARELA_CLIENT_ID || "",
     clientSecret: process.env.KOMMO_AMARELA_CLIENT_SECRET || "",

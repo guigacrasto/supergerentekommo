@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { KommoService } from "../../services/kommo.js";
-import { TeamKey } from "../../config.js";
+import { TeamKey, TEAMS } from "../../config.js";
 import { getCrmMetrics } from "../cache/crm-cache.js";
 import { getActivityMetrics, ActivityMetrics } from "../cache/activity-cache.js";
 import { requireAuth, AuthRequest } from "../middleware/requireAuth.js";
@@ -228,6 +228,7 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
     const targetDate = dateMatch ? dateStr : new Date().toISOString().slice(0, 10);
     const funilFilter = typeof req.query.funil === "string" ? req.query.funil : "";
     const agenteFilter = typeof req.query.agente === "string" ? req.query.agente : "";
+    const groupFilter = typeof req.query.group === "string" ? req.query.group : "";
 
     try {
       const [year, month] = targetDate.split("-").map(Number);
@@ -247,6 +248,19 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
       const STATUS_LOST = 143;
 
       const allMetrics = await getFilteredMetrics(req);
+
+      // Build group user IDs set for filtering
+      let groupUserIds: Set<number> | null = null;
+      const allGroups = new Set<string>();
+      for (const { metrics } of allMetrics) {
+        for (const [userId, groupName] of Object.entries(metrics.userGroups)) {
+          allGroups.add(groupName);
+          if (groupFilter && groupName === groupFilter) {
+            if (!groupUserIds) groupUserIds = new Set<number>();
+            groupUserIds.add(Number(userId));
+          }
+        }
+      }
 
       // Collect all funnel names and agent names across teams
       const funisSet = new Set<string>();
@@ -285,6 +299,10 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
         if (filterAgenteIds) {
           leads = leads.filter((l) => filterAgenteIds.has(l.responsible_user_id));
         }
+        // Filter by group if selected
+        if (groupUserIds) {
+          leads = leads.filter((l) => groupUserIds!.has(l.responsible_user_id));
+        }
 
         const leadsDia = leads.filter((l) => l.created_at >= dayStart && l.created_at <= dayEnd).length;
         const leadsMes = leads.filter((l) => l.created_at >= monthStart && l.created_at <= monthEnd).length;
@@ -308,7 +326,7 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
         };
       });
 
-      res.json({ metrics: result, funis, agentes });
+      res.json({ metrics: result, funis, agentes, grupos: Array.from(allGroups).sort() });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -340,11 +358,25 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
     const funilFilter = typeof req.query.funil === "string" ? req.query.funil : "";
     const agenteFilter = typeof req.query.agente === "string" ? req.query.agente : "";
     const teamFilterParam = typeof req.query.team === "string" ? req.query.team : "";
+    const groupFilter = typeof req.query.group === "string" ? req.query.group : "";
 
     try {
       let allMetrics = await getFilteredMetrics(req);
       if (teamFilterParam) {
         allMetrics = allMetrics.filter(({ team }) => team === teamFilterParam);
+      }
+
+      // Build group user IDs set for filtering
+      let groupUserIds: Set<number> | null = null;
+      const allGroups = new Set<string>();
+      for (const { metrics } of allMetrics) {
+        for (const [userId, groupName] of Object.entries(metrics.userGroups)) {
+          allGroups.add(groupName);
+          if (groupFilter && groupName === groupFilter) {
+            if (!groupUserIds) groupUserIds = new Set<number>();
+            groupUserIds.add(Number(userId));
+          }
+        }
       }
 
       // Collect funnel/agent lists and build lookup maps
@@ -387,6 +419,7 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
           if (lead.closed_at < fromTs || lead.closed_at > toTs) continue;
           if (filterPipelineIds && !filterPipelineIds.has(lead.pipeline_id)) continue;
           if (filterAgenteIds && !filterAgenteIds.has(lead.responsible_user_id)) continue;
+          if (groupUserIds && !groupUserIds.has(lead.responsible_user_id)) continue;
           wonLeads.push({
             responsible_user_id: lead.responsible_user_id,
             created_at: lead.created_at,
@@ -463,38 +496,84 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
         porAgente,
         funis,
         agentes,
+        grupos: Array.from(allGroups).sort(),
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  // GET /api/reports/loss-reasons?from=YYYY-MM-DD&to=YYYY-MM-DD — Motivos de Perda
+  // GET /api/reports/loss-reasons?from=YYYY-MM-DD&to=YYYY-MM-DD&funil=X&agente=X&team=X — Motivos de Perda
   router.get("/loss-reasons", async (req: AuthRequest, res) => {
     const { fromTs, toTs } = parseDateRange(req.query);
     const STATUS_LOST = 143;
+    const funilFilter = typeof req.query.funil === "string" ? req.query.funil : "";
+    const agenteFilter = typeof req.query.agente === "string" ? req.query.agente : "";
+    const teamFilter = typeof req.query.team === "string" ? req.query.team : "";
+    const groupFilter = typeof req.query.group === "string" ? req.query.group : "";
 
     try {
       const allMetrics = await getFilteredMetrics(req);
+
+      // Build group user IDs set
+      let groupUserIds: Set<number> | null = null;
+      const allGroups = new Set<string>();
+      for (const { metrics } of allMetrics) {
+        for (const [userId, groupName] of Object.entries(metrics.userGroups)) {
+          allGroups.add(groupName);
+          if (groupFilter && groupName === groupFilter) {
+            if (!groupUserIds) groupUserIds = new Set<number>();
+            groupUserIds.add(Number(userId));
+          }
+        }
+      }
 
       // Collect all lost leads in range
       const lostLeads: Array<{
         responsible_user_id: number;
         loss_reason_id: number;
+        pipeline_id: number;
       }> = [];
       let userNamesMap: Record<number, string> = {};
+      let lossReasonNamesMap: Record<number, string> = {};
+      let pipelineNamesMap: Record<number, string> = {};
+      const allAgentNames = new Set<string>();
+      const allFunilNames = new Set<string>();
 
-      for (const { metrics } of allMetrics) {
+      for (const { team, metrics } of allMetrics) {
+        if (teamFilter && team !== teamFilter) continue;
         Object.assign(userNamesMap, metrics.userNames);
+        Object.assign(lossReasonNamesMap, metrics.lossReasonNames);
+        Object.assign(pipelineNamesMap, metrics.pipelineNames);
+
+        // Collect unique agente/funil names
+        for (const v of metrics.vendedores) {
+          allAgentNames.add(v.nome);
+          allFunilNames.add(v.funil.replace(/^FUNIL\s+/i, ""));
+        }
+
         for (const lead of metrics.leadSnapshots) {
           if (
             lead.status_id === STATUS_LOST &&
             lead.closed_at >= fromTs &&
             lead.closed_at <= toTs
           ) {
+            // Apply funil filter
+            if (funilFilter) {
+              const pName = (pipelineNamesMap[lead.pipeline_id] || "").replace(/^FUNIL\s+/i, "");
+              if (pName !== funilFilter) continue;
+            }
+            // Apply agente filter
+            if (agenteFilter) {
+              const agentName = userNamesMap[lead.responsible_user_id] || "";
+              if (agentName !== agenteFilter) continue;
+            }
+            // Apply group filter
+            if (groupUserIds && !groupUserIds.has(lead.responsible_user_id)) continue;
             lostLeads.push({
               responsible_user_id: lead.responsible_user_id,
               loss_reason_id: lead.loss_reason_id || 0,
+              pipeline_id: lead.pipeline_id,
             });
           }
         }
@@ -511,6 +590,7 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
       const motivos = Object.entries(motivosMap)
         .map(([reasonId, count]) => ({
           loss_reason_id: Number(reasonId),
+          nome: Number(reasonId) === 0 ? "Sem motivo" : (lossReasonNamesMap[Number(reasonId)] || `Motivo ${reasonId}`),
           count,
           pct: totalPerdidos > 0 ? ((count / totalPerdidos) * 100).toFixed(1) + "%" : "0.0%",
         }))
@@ -532,6 +612,7 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
           const motivosList = Object.entries(reasons)
             .map(([reasonId, count]) => ({
               loss_reason_id: Number(reasonId),
+              nome: Number(reasonId) === 0 ? "Sem motivo" : (lossReasonNamesMap[Number(reasonId)] || `Motivo ${reasonId}`),
               count,
             }))
             .sort((a, b) => b.count - a.count);
@@ -543,7 +624,10 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
         })
         .sort((a, b) => b.total - a.total);
 
-      res.json({ motivos, porAgente, totalPerdidos });
+      const funis = Array.from(allFunilNames).sort();
+      const agentes = Array.from(allAgentNames).sort();
+
+      res.json({ motivos, porAgente, totalPerdidos, funis, agentes, grupos: Array.from(allGroups).sort() });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -554,6 +638,8 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
     const { fromTs, toTs } = parseDateRange(req.query);
     const STATUS_WON = 142;
     const rendaPattern = /renda/i;
+    const teamFilter = typeof req.query.team === "string" ? req.query.team : "";
+    const groupFilter = typeof req.query.group === "string" ? req.query.group : "";
 
     const brackets: Array<{ label: string; min: number; max: number }> = [
       { label: "Até R$ 2.000", min: 0, max: 2000 },
@@ -566,6 +652,19 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
     try {
       const allMetrics = await getFilteredMetrics(req);
 
+      // Build group user IDs set for filtering
+      let groupUserIds: Set<number> | null = null;
+      const allGroups = new Set<string>();
+      for (const { metrics } of allMetrics) {
+        for (const [userId, groupName] of Object.entries(metrics.userGroups)) {
+          allGroups.add(groupName);
+          if (groupFilter && groupName === groupFilter) {
+            if (!groupUserIds) groupUserIds = new Set<number>();
+            groupUserIds.add(Number(userId));
+          }
+        }
+      }
+
       // Collect leads in date range
       const leads: Array<{
         status_id: number;
@@ -573,9 +672,11 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
         renda: string | null;
       }> = [];
 
-      for (const { metrics } of allMetrics) {
+      for (const { team, metrics } of allMetrics) {
+        if (teamFilter && team !== teamFilter) continue;
         for (const lead of metrics.leadSnapshots) {
           if (lead.created_at >= fromTs && lead.created_at <= toTs) {
+            if (groupUserIds && !groupUserIds.has(lead.responsible_user_id)) continue;
             leads.push({
               status_id: lead.status_id,
               price: lead.price || 0,
@@ -627,7 +728,7 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
         };
       });
 
-      res.json({ faixas });
+      res.json({ faixas, grupos: Array.from(allGroups).sort() });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -638,9 +739,24 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
     const { fromTs, toTs } = parseDateRange(req.query);
     const STATUS_WON = 142;
     const profissaoPattern = /profiss[aã]o/i;
+    const teamFilter = typeof req.query.team === "string" ? req.query.team : "";
+    const groupFilter = typeof req.query.group === "string" ? req.query.group : "";
 
     try {
       const allMetrics = await getFilteredMetrics(req);
+
+      // Build group user IDs set for filtering
+      let groupUserIds: Set<number> | null = null;
+      const allGroups = new Set<string>();
+      for (const { metrics } of allMetrics) {
+        for (const [userId, groupName] of Object.entries(metrics.userGroups)) {
+          allGroups.add(groupName);
+          if (groupFilter && groupName === groupFilter) {
+            if (!groupUserIds) groupUserIds = new Set<number>();
+            groupUserIds.add(Number(userId));
+          }
+        }
+      }
 
       // Collect leads in date range
       const leads: Array<{
@@ -649,9 +765,11 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
         profissao: string | null;
       }> = [];
 
-      for (const { metrics } of allMetrics) {
+      for (const { team, metrics } of allMetrics) {
+        if (teamFilter && team !== teamFilter) continue;
         for (const lead of metrics.leadSnapshots) {
           if (lead.created_at >= fromTs && lead.created_at <= toTs) {
+            if (groupUserIds && !groupUserIds.has(lead.responsible_user_id)) continue;
             leads.push({
               status_id: lead.status_id,
               price: lead.price || 0,
@@ -691,7 +809,7 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
         .sort((a, b) => b.volume - a.volume)
         .slice(0, 20);
 
-      res.json({ profissoes });
+      res.json({ profissoes, grupos: Array.from(allGroups).sort() });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -740,18 +858,28 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
             activity = await getActivityMetrics(team, services[team], metrics);
           } catch {}
 
-          const vendedores = metrics.vendedores.map((v) => ({
-            nome: v.nome,
-            funil: v.funil,
-            team,
-            total: v.total,
-            ganhos: v.ganhos,
-            ganhosHoje: v.ganhosHoje,
-            ganhosSemana: v.ganhosSemana,
-            ativos: v.ativos,
-          }));
+          // Map vendedores to include group name
+          const vendedores = metrics.vendedores.map((v) => {
+            // Find userId for this vendedor
+            const userId = Object.entries(metrics.userNames).find(([, name]) => name === v.nome)?.[0];
+            const grupo = userId ? (metrics.userGroups[Number(userId)] || "") : "";
+            return {
+              nome: v.nome,
+              funil: v.funil,
+              team,
+              grupo,
+              total: v.total,
+              ganhos: v.ganhos,
+              ganhosHoje: v.ganhosHoje,
+              ganhosSemana: v.ganhosSemana,
+              ativos: v.ativos,
+            };
+          });
 
-          return { team, summary, agents, vendedores, activity };
+          // Collect unique groups for this team
+          const gruposSet = new Set(Object.values(metrics.userGroups));
+
+          return { team, summary, agents, vendedores, activity, grupos: Array.from(gruposSet).sort() };
         })
       );
 
@@ -760,18 +888,20 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
       const vendedores = teamsData.flatMap((t) => t.vendedores);
       const agentsByTeam: Record<string, any[]> = {};
       const activityList: Array<{ team: string; label: string; activity: any }> = [];
+      const gruposByTeam: Record<string, string[]> = {};
       for (const t of teamsData) {
         agentsByTeam[t.team] = t.agents;
+        gruposByTeam[t.team] = t.grupos;
         if (t.activity) {
           activityList.push({
             team: t.team,
-            label: t.team === "azul" ? "Equipe Azul" : "Equipe Amarela",
+            label: TEAMS[t.team as TeamKey]?.label || t.team,
             activity: t.activity,
           });
         }
       }
 
-      res.json({ summary, vendedores, dashboard: { agentsByTeam }, activity: activityList });
+      res.json({ summary, vendedores, dashboard: { agentsByTeam }, activity: activityList, gruposByTeam });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -834,16 +964,23 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
               activity = await getActivityMetrics(team, services[team], metrics);
             } catch {}
 
-            const vendedores = metrics.vendedores.map((v) => ({
-              nome: v.nome,
-              funil: v.funil,
-              team,
-              total: v.total,
-              ganhos: v.ganhos,
-              ganhosHoje: v.ganhosHoje,
-              ganhosSemana: v.ganhosSemana,
-              ativos: v.ativos,
-            }));
+            const vendedores = metrics.vendedores.map((v) => {
+              const userId = Object.entries(metrics.userNames).find(([, name]) => name === v.nome)?.[0];
+              const grupo = userId ? (metrics.userGroups[Number(userId)] || "") : "";
+              return {
+                nome: v.nome,
+                funil: v.funil,
+                team,
+                grupo,
+                total: v.total,
+                ganhos: v.ganhos,
+                ganhosHoje: v.ganhosHoje,
+                ganhosSemana: v.ganhosSemana,
+                ativos: v.ativos,
+              };
+            });
+
+            const grupos = Array.from(new Set(Object.values(metrics.userGroups))).sort();
 
             return {
               team,
@@ -852,6 +989,7 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
               agents,
               vendedores,
               activity,
+              grupos,
               atualizadoEm: new Date().toISOString(),
             };
           })

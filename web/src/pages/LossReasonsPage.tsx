@@ -2,12 +2,18 @@ import { useEffect, useState, useCallback } from 'react';
 import { CalendarDays, XCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
-import { Chip, Skeleton, LiveTimestamp } from '@/components/ui';
+import { useFilterStore } from '@/stores/filterStore';
+import { Skeleton, LiveTimestamp } from '@/components/ui';
 import { KPICard } from '@/components/features/dashboard/KPICard';
 import { TagFilter } from '@/components/features/filters/TagFilter';
+import { FunilFilter } from '@/components/features/filters/FunilFilter';
+import { AgenteFilter } from '@/components/features/filters/AgenteFilter';
+import { TimeFilter } from '@/components/features/filters/TimeFilter';
+import { GroupFilter } from '@/components/features/filters/GroupFilter';
 
 interface LossMotivo {
   loss_reason_id: number;
+  nome: string;
   count: number;
   pct: string;
 }
@@ -17,12 +23,13 @@ interface LossReasonsData {
   porAgente: Array<{
     nome: string;
     total: number;
-    motivos: Array<{ loss_reason_id: number; count: number }>;
+    motivos: Array<{ loss_reason_id: number; nome: string; count: number }>;
   }>;
   totalPerdidos: number;
+  funis: string[];
+  agentes: string[];
+  grupos: string[];
 }
-
-type TeamFilter = '' | 'azul' | 'amarela';
 
 function getDefaultFrom(): string {
   const d = new Date();
@@ -36,22 +43,27 @@ function getToday(): string {
 
 export function LossReasonsPage() {
   const user = useAuthStore((s) => s.user);
+  const selectedFunil = useFilterStore((s) => s.selectedFunil);
   const [data, setData] = useState<LossReasonsData | null>(null);
+  const [selectedAgente, setSelectedAgente] = useState('');
+  const [groupFilter, setGroupFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [from, setFrom] = useState(getDefaultFrom);
   const [to, setTo] = useState(getToday);
-  const [teamFilter, setTeamFilter] = useState<TeamFilter>('');
+  const [teamFilter, setTeamFilter] = useState('');
   const [lastFetchTime, setLastFetchTime] = useState('');
 
   const userTeams = user?.teams ?? [];
-  const hasMultipleTeams = userTeams.length > 1;
 
-  const fetchData = useCallback(async (fromDate: string, toDate: string) => {
+  const fetchData = useCallback(async (fromDate: string, toDate: string, funil: string, agente: string, team: string, group: string) => {
     try {
       setLoading(true);
-      const res = await api.get<LossReasonsData>('/reports/loss-reasons', {
-        params: { from: fromDate, to: toDate },
-      });
+      const params: Record<string, string> = { from: fromDate, to: toDate };
+      if (funil) params.funil = funil;
+      if (agente) params.agente = agente;
+      if (team) params.team = team;
+      if (group) params.group = group;
+      const res = await api.get<LossReasonsData>('/reports/loss-reasons', { params });
       setData(res.data);
       setLastFetchTime(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     } catch (err) {
@@ -62,16 +74,19 @@ export function LossReasonsPage() {
   }, []);
 
   useEffect(() => {
-    fetchData(from, to);
-  }, [from, to, fetchData]);
+    fetchData(from, to, selectedFunil, selectedAgente, teamFilter, groupFilter);
+  }, [from, to, selectedFunil, selectedAgente, teamFilter, groupFilter, fetchData]);
 
+  const funis = data?.funis ?? [];
+  const agentes = data?.agentes ?? [];
+  const grupos = data?.grupos ?? [];
   const motivos = data?.motivos ?? [];
 
   return (
     <div className="flex flex-col gap-6">
       <LiveTimestamp timestamp={lastFetchTime} />
 
-      {/* Date range + Team filter */}
+      {/* Filters */}
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
           <CalendarDays className="h-5 w-5 text-primary" />
@@ -90,28 +105,14 @@ export function LossReasonsPage() {
           />
         </div>
 
-        {hasMultipleTeams && (
-          <div className="flex items-center gap-2">
-            <Chip active={teamFilter === ''} onClick={() => setTeamFilter('')}>
-              Todas
-            </Chip>
-            {userTeams.includes('azul') && (
-              <Chip active={teamFilter === 'azul'} onClick={() => setTeamFilter('azul')}>
-                Azul
-              </Chip>
-            )}
-            {userTeams.includes('amarela') && (
-              <Chip active={teamFilter === 'amarela'} onClick={() => setTeamFilter('amarela')}>
-                Amarela
-              </Chip>
-            )}
-          </div>
-        )}
-
+        <TimeFilter teams={userTeams} selected={teamFilter} onChange={(t) => { setTeamFilter(t); setGroupFilter(''); }} />
+        <GroupFilter grupos={grupos} selected={groupFilter} onChange={setGroupFilter} />
+        <FunilFilter funis={funis} />
+        <AgenteFilter agentes={agentes} selected={selectedAgente} onChange={setSelectedAgente} />
         <TagFilter />
       </div>
 
-      {/* 1 KPI Card */}
+      {/* KPI Card */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <KPICard
           label="Total Perdidos"
@@ -157,7 +158,7 @@ export function LossReasonsPage() {
               motivos.map((motivo) => (
                 <tr key={motivo.loss_reason_id} className="hover:bg-surface-secondary/50 transition-colors">
                   <td className="border-t border-glass-border px-4 py-3 text-body-md text-foreground font-medium">
-                    {motivo.loss_reason_id === 0 ? 'Sem motivo' : motivo.loss_reason_id}
+                    {motivo.nome}
                   </td>
                   <td className="border-t border-glass-border px-4 py-3 text-right text-body-md text-foreground">
                     {motivo.count}

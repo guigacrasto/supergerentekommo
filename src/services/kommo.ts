@@ -192,6 +192,17 @@ export class KommoService {
         }
     }
 
+    public async getGroups(): Promise<Array<{ id: number; name: string }>> {
+        try {
+            const response = await this.client.get("/groups");
+            const groups = response.data?._embedded?.groups || [];
+            return groups.map((g: any) => ({ id: g.id, name: g.name }));
+        } catch (error) {
+            console.error("Error fetching groups:", error);
+            return [];
+        }
+    }
+
     public async getUsers(): Promise<any[]> {
         try {
             const response = await this.client.get("/users");
@@ -214,6 +225,17 @@ export class KommoService {
         } catch (error) {
             console.error("Error fetching events:", error);
             throw error;
+        }
+    }
+
+    public async getLossReasons(): Promise<Array<{ id: number; name: string }>> {
+        try {
+            const response = await this.client.get("/leads/loss_reasons");
+            const reasons = response.data?._embedded?.loss_reasons || [];
+            return reasons.map((r: any) => ({ id: r.id, name: r.name }));
+        } catch (error) {
+            console.error("Error fetching loss reasons:", error);
+            return [];
         }
     }
 

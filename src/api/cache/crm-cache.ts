@@ -73,6 +73,8 @@ export interface CrmMetrics {
   leadSnapshots: LeadSnapshot[];
   pipelineNames: Record<number, string>;
   userNames: Record<number, string>;
+  userGroups: Record<number, string>;
+  lossReasonNames: Record<number, string>;
   allTags: LeadTag[];
   atualizadoEm: string;
 }
@@ -139,13 +141,17 @@ async function fetchAndCompute(team: TeamKey, service: KommoService): Promise<Cr
       leadSnapshots: [],
       pipelineNames: {},
       userNames: {},
+      userGroups: {},
+      lossReasonNames: {},
       allTags: [],
       atualizadoEm: new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }),
     };
   }
 
-  const [users, ...leadsPerPipeline] = await Promise.all([
+  const [users, lossReasons, groups, ...leadsPerPipeline] = await Promise.all([
     service.getUsers(),
+    service.getLossReasons(),
+    service.getGroups(),
     ...pipelines.map((p: any) => service.getLeads({ filter: { pipeline_id: p.id } })),
   ]);
 
@@ -246,6 +252,21 @@ async function fetchAndCompute(team: TeamKey, service: KommoService): Promise<Cr
   const userNamesMap: Record<number, string> = {};
   users.forEach((u: any) => { userNamesMap[u.id] = u.name; });
 
+  // Build group name lookup
+  const groupNamesMap: Record<number, string> = {};
+  groups.forEach((g: { id: number; name: string }) => { groupNamesMap[g.id] = g.name; });
+
+  // Map users to their group names
+  const userGroupsMap: Record<number, string> = {};
+  users.forEach((u: any) => {
+    if (u.group_id && groupNamesMap[u.group_id]) {
+      userGroupsMap[u.id] = groupNamesMap[u.group_id];
+    }
+  });
+
+  const lossReasonNamesMap: Record<number, string> = {};
+  lossReasons.forEach((r: { id: number; name: string }) => { lossReasonNamesMap[r.id] = r.name; });
+
   // Coletar todas as tags únicas
   const tagMap = new Map<number, string>();
   for (const snap of leadSnapshots) {
@@ -265,6 +286,8 @@ async function fetchAndCompute(team: TeamKey, service: KommoService): Promise<Cr
     leadSnapshots,
     pipelineNames,
     userNames: userNamesMap,
+    userGroups: userGroupsMap,
+    lossReasonNames: lossReasonNamesMap,
     allTags,
     atualizadoEm: new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }),
   };

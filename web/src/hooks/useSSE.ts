@@ -37,6 +37,7 @@ interface SSEVendedor {
   nome: string;
   funil: string;
   team: string;
+  grupo: string;
   total: number;
   ganhos: number;
   ganhosHoje: number;
@@ -55,6 +56,7 @@ interface SSETeamData {
   agents: SSEAgent[];
   vendedores: SSEVendedor[];
   activity: SSEActivity | null;
+  grupos: string[];
   atualizadoEm: string;
 }
 
