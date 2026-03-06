@@ -276,17 +276,41 @@ async function fetchAndCompute(team: TeamKey, service: KommoService): Promise<Cr
     if (gid && gid !== 0) uniqueGroupIds.add(gid);
   });
 
-  // If bulk /groups returned empty, resolve names individually
+  // If bulk /groups returned empty, try account endpoint and individual resolution
   if (groups.length === 0 && uniqueGroupIds.size > 0) {
-    console.log(`[CrmCache:${team}] Resolving ${uniqueGroupIds.size} groups by ID: ${[...uniqueGroupIds]}`);
-    const resolved = await Promise.all(
-      [...uniqueGroupIds].map((gid) => service.getGroupById(gid))
-    );
-    for (const g of resolved) {
-      if (g) groupNamesMap[g.id] = g.name;
+    // Try 1: account endpoint may contain users_groups
+    const accountInfo = await service.getAccountInfo();
+    if (accountInfo) {
+      const accountGroups = accountInfo?._embedded?.groups
+        || accountInfo?._embedded?.users_groups
+        || accountInfo?.groups
+        || accountInfo?.users_groups
+        || [];
+      if (Array.isArray(accountGroups) && accountGroups.length > 0) {
+        for (const g of accountGroups) {
+          if (g.id && g.name) groupNamesMap[g.id] = g.name;
+        }
+        console.log(`[CrmCache:${team}] Groups from account: ${JSON.stringify(groupNamesMap)}`);
+      } else {
+        console.log(`[CrmCache:${team}] Account keys: ${JSON.stringify(Object.keys(accountInfo))}`);
+        if (accountInfo._embedded) {
+          console.log(`[CrmCache:${team}] Account _embedded keys: ${JSON.stringify(Object.keys(accountInfo._embedded))}`);
+        }
+      }
+    }
+
+    // Try 2: resolve individually if still empty
+    if (Object.keys(groupNamesMap).length === 0) {
+      console.log(`[CrmCache:${team}] Resolving ${uniqueGroupIds.size} groups by ID: ${[...uniqueGroupIds]}`);
+      const resolved = await Promise.all(
+        [...uniqueGroupIds].map((gid) => service.getGroupById(gid))
+      );
+      for (const g of resolved) {
+        if (g) groupNamesMap[g.id] = g.name;
+      }
     }
   }
-  console.log(`[CrmCache:${team}] Group names: ${JSON.stringify(groupNamesMap)}`);
+  console.log(`[CrmCache:${team}] Group names resolved: ${JSON.stringify(groupNamesMap)}`);
 
   // Map users to their group names (group_id is in rights object)
   const userGroupsMap: Record<number, string> = {};

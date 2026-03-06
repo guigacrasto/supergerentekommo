@@ -210,12 +210,32 @@ export class KommoService {
     }
 
     public async getGroupById(groupId: number): Promise<{ id: number; name: string } | null> {
+        // Try multiple Kommo API paths for group resolution
+        const paths = [`/groups/${groupId}`, `/users/groups/${groupId}`];
+        for (const path of paths) {
+            try {
+                const response = await this.client.get(path);
+                const data = response.data;
+                if (data?.name) return { id: data.id || groupId, name: data.name };
+            } catch {}
+        }
+        return null;
+    }
+
+    public async getAccountInfo(): Promise<any> {
         try {
-            const response = await this.client.get(`/groups/${groupId}`);
-            const data = response.data;
-            return { id: data.id, name: data.name };
+            const response = await this.client.get("/account", {
+                params: { with: "amojo_id,amojo_rights,users_groups,task_types,datetime_settings" }
+            });
+            return response.data;
         } catch {
-            return null;
+            // Try without params
+            try {
+                const response = await this.client.get("/account");
+                return response.data;
+            } catch {
+                return null;
+            }
         }
     }
 
