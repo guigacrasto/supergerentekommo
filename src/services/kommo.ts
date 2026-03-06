@@ -194,11 +194,13 @@ export class KommoService {
 
     public async getGroups(): Promise<Array<{ id: number; name: string }>> {
         try {
-            const response = await this.client.get("/groups");
+            // Kommo exposes groups via the account endpoint with ?with=groups
+            const response = await this.client.get("/account", { params: { with: "groups" } });
             const groups = response.data?._embedded?.groups || [];
+            console.log(`[Kommo] Account groups response: ${JSON.stringify(groups.map((g: any) => ({ id: g.id, name: g.name })))}`);
             return groups.map((g: any) => ({ id: g.id, name: g.name }));
         } catch (error) {
-            console.error("Error fetching groups:", error);
+            console.error("Error fetching groups from account:", error);
             return [];
         }
     }

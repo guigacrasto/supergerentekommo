@@ -269,6 +269,7 @@ async function fetchAndCompute(team: TeamKey, service: KommoService): Promise<Cr
   const groupNamesMap: Record<number, string> = {};
   groups.forEach((g: { id: number; name: string }) => { groupNamesMap[g.id] = g.name; });
   console.log(`[CrmCache:${team}] Groups from API: ${JSON.stringify(groups)}`);
+  console.log(`[CrmCache:${team}] Users group_ids: ${JSON.stringify(users.slice(0, 5).map((u: any) => ({ id: u.id, name: u.name, group_id: u.group_id })))}`);
 
   // Map users to their group names
   const userGroupsMap: Record<number, string> = {};
