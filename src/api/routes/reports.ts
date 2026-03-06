@@ -227,6 +227,7 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
     const dateMatch = dateStr.match(/^\d{4}-\d{2}-\d{2}$/);
     const targetDate = dateMatch ? dateStr : new Date().toISOString().slice(0, 10);
     const funilFilter = typeof req.query.funil === "string" ? req.query.funil : "";
+    const agenteFilter = typeof req.query.agente === "string" ? req.query.agente : "";
 
     try {
       const [year, month] = targetDate.split("-").map(Number);
@@ -247,9 +248,12 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
 
       const allMetrics = await getFilteredMetrics(req);
 
-      // Collect all funnel names across teams
+      // Collect all funnel names and agent names across teams
       const funisSet = new Set<string>();
+      const agentesSet = new Set<string>();
       const pipelineNameToIds = new Map<string, Set<number>>();
+      const agenteNameToIds = new Map<string, Set<number>>();
+
       for (const { metrics } of allMetrics) {
         for (const [key, funil] of Object.entries(metrics.funis)) {
           const cleanName = funil.nome.replace(/^FUNIL\s+/i, "");
@@ -257,11 +261,18 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
           if (!pipelineNameToIds.has(cleanName)) pipelineNameToIds.set(cleanName, new Set());
           pipelineNameToIds.get(cleanName)!.add(Number(key));
         }
+        for (const [userId, userName] of Object.entries(metrics.userNames)) {
+          agentesSet.add(userName);
+          if (!agenteNameToIds.has(userName)) agenteNameToIds.set(userName, new Set());
+          agenteNameToIds.get(userName)!.add(Number(userId));
+        }
       }
       const funis = Array.from(funisSet).sort();
+      const agentes = Array.from(agentesSet).sort();
 
-      // Resolve pipeline IDs for funnel filter
+      // Resolve filter IDs
       const filterPipelineIds = funilFilter ? pipelineNameToIds.get(funilFilter) : null;
+      const filterAgenteIds = agenteFilter ? agenteNameToIds.get(agenteFilter) : null;
 
       const result = allMetrics.map(({ team, metrics }) => {
         let leads = metrics.leadSnapshots;
@@ -269,6 +280,10 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
         // Filter by pipeline if funnel is selected
         if (filterPipelineIds) {
           leads = leads.filter((l) => filterPipelineIds.has(l.pipeline_id));
+        }
+        // Filter by agent if selected
+        if (filterAgenteIds) {
+          leads = leads.filter((l) => filterAgenteIds.has(l.responsible_user_id));
         }
 
         const leadsDia = leads.filter((l) => l.created_at >= dayStart && l.created_at <= dayEnd).length;
@@ -293,7 +308,7 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
         };
       });
 
-      res.json({ metrics: result, funis });
+      res.json({ metrics: result, funis, agentes });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

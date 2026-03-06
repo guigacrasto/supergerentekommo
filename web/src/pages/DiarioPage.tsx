@@ -22,6 +22,7 @@ interface DailyMetrics {
 interface DailyResponse {
   metrics: DailyMetrics[];
   funis: string[];
+  agentes: string[];
 }
 
 type TeamFilter = '' | 'azul' | 'amarela';
@@ -32,6 +33,8 @@ export function DiarioPage() {
   const setSelectedFunil = useFilterStore((s) => s.setSelectedFunil);
   const [data, setData] = useState<DailyMetrics[]>([]);
   const [funis, setFunis] = useState<string[]>([]);
+  const [agentes, setAgentes] = useState<string[]>([]);
+  const [selectedAgente, setSelectedAgente] = useState('');
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(() =>
     new Date().toISOString().slice(0, 10)
@@ -42,13 +45,16 @@ export function DiarioPage() {
   const userTeams = user?.teams ?? [];
   const hasMultipleTeams = userTeams.length > 1;
 
-  const fetchData = useCallback(async (date: string, funil: string) => {
+  const fetchData = useCallback(async (date: string, funil: string, agente: string) => {
     try {
       setLoading(true);
-      const funilParam = funil ? `&funil=${encodeURIComponent(funil)}` : '';
-      const res = await api.get<DailyResponse>(`/reports/daily?date=${date}${funilParam}`);
+      const params = new URLSearchParams({ date });
+      if (funil) params.set('funil', funil);
+      if (agente) params.set('agente', agente);
+      const res = await api.get<DailyResponse>(`/reports/daily?${params.toString()}`);
       setData(res.data.metrics);
-      setFunis(res.data.funis);
+      setFunis(res.data.funis ?? []);
+      setAgentes(res.data.agentes ?? []);
       setLastFetchTime(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     } catch (err) {
       console.error('[DiarioPage] Erro ao carregar dados:', err);
@@ -58,14 +64,13 @@ export function DiarioPage() {
   }, []);
 
   useEffect(() => {
-    fetchData(selectedDate, selectedFunil);
-  }, [selectedDate, selectedFunil, fetchData]);
+    fetchData(selectedDate, selectedFunil, selectedAgente);
+  }, [selectedDate, selectedFunil, selectedAgente, fetchData]);
 
   const filtered = teamFilter ? data.filter((d) => d.team === teamFilter) : data;
 
-  // Filter available funis by team if team is selected
-  const availableFunis = funis;
-  const effectiveFunil = availableFunis.includes(selectedFunil) ? selectedFunil : '';
+  const effectiveFunil = funis.includes(selectedFunil) ? selectedFunil : '';
+  const effectiveAgente = agentes.includes(selectedAgente) ? selectedAgente : '';
 
   const totals = filtered.reduce(
     (acc, d) => ({
@@ -90,7 +95,7 @@ export function DiarioPage() {
     <div className="flex flex-col gap-6">
       <LiveTimestamp timestamp={lastFetchTime} />
 
-      {/* Date picker + Team filter + Funnel filter */}
+      {/* Filters */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
@@ -124,12 +129,13 @@ export function DiarioPage() {
           <TagFilter />
         </div>
 
-        {availableFunis.length > 1 && (
+        {/* Funnel filter */}
+        {funis.length > 1 && (
           <div className="flex items-center gap-2 flex-wrap">
             <Chip active={effectiveFunil === ''} onClick={() => setSelectedFunil('')}>
               Todos os Funis
             </Chip>
-            {availableFunis.map((funil) => (
+            {funis.map((funil) => (
               <Chip
                 key={funil}
                 active={effectiveFunil === funil}
@@ -140,9 +146,27 @@ export function DiarioPage() {
             ))}
           </div>
         )}
+
+        {/* Agent filter */}
+        {agentes.length > 1 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <Chip active={effectiveAgente === ''} onClick={() => setSelectedAgente('')}>
+              Todos os Agentes
+            </Chip>
+            {agentes.map((agente) => (
+              <Chip
+                key={agente}
+                active={effectiveAgente === agente}
+                onClick={() => setSelectedAgente(agente === effectiveAgente ? '' : agente)}
+              >
+                {agente}
+              </Chip>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* KPI Cards — Dia row + Mês row */}
+      {/* KPI Cards — Row 1: Dia | Row 2: Mês */}
       <div className="grid grid-cols-3 gap-4">
         <KPICard
           label="Leads Dia"
