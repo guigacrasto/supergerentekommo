@@ -5,7 +5,6 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  Cell,
 } from 'recharts';
 import { Card, CardHeader, CardTitle } from '@/components/ui';
 
@@ -78,24 +77,18 @@ export function TeamBarChart({ team, label, agents, color }: TeamBarChartProps) 
                   backgroundColor: '#22182D',
                   border: '1px solid rgba(255,255,255,0.08)',
                   borderRadius: '8px',
-                  color: '#E0E3E9',
+                  color: '#FFFFFF',
                   fontSize: '0.875rem',
                 }}
+                labelStyle={{ color: '#FFFFFF', fontWeight: 500 }}
+                itemStyle={{ color: '#E0E3E9' }}
                 formatter={(value: number | undefined) => [
                   `${value ?? 0} leads (${total > 0 && value ? ((value / total) * 100).toFixed(1) : 0}%)`,
                   'Total',
                 ]}
                 cursor={{ fill: 'rgba(255,255,255,0.04)' }}
               />
-              <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={24}>
-                {chartData.map((_, index) => (
-                  <Cell
-                    key={`cell-${index}`}
-                    fill={color}
-                    fillOpacity={1 - index * 0.04}
-                  />
-                ))}
-              </Bar>
+              <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={24} fill={color} />
             </BarChart>
           </ResponsiveContainer>
         )}
