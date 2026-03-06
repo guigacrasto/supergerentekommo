@@ -268,6 +268,7 @@ async function fetchAndCompute(team: TeamKey, service: KommoService): Promise<Cr
   // Build group name lookup
   const groupNamesMap: Record<number, string> = {};
   groups.forEach((g: { id: number; name: string }) => { groupNamesMap[g.id] = g.name; });
+  console.log(`[CrmCache:${team}] Groups from API: ${JSON.stringify(groups)}`);
 
   // Map users to their group names
   const userGroupsMap: Record<number, string> = {};
@@ -276,6 +277,7 @@ async function fetchAndCompute(team: TeamKey, service: KommoService): Promise<Cr
       userGroupsMap[u.id] = groupNamesMap[u.group_id];
     }
   });
+  console.log(`[CrmCache:${team}] User groups mapped: ${JSON.stringify(userGroupsMap)}`);
 
   const lossReasonNamesMap: Record<number, string> = {};
   lossReasons.forEach((r: { id: number; name: string }) => { lossReasonNamesMap[r.id] = r.name; });
