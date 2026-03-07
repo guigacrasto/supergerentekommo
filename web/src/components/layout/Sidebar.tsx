@@ -24,7 +24,7 @@ import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { usePipelines } from '@/hooks/usePipelines';
-import { TEAM_LABELS, APP_SHORT_NAME, APP_NAME } from '@/lib/constants';
+import { TEAM_LABELS, APP_NAME } from '@/lib/constants';
 import { stripFunilPrefix } from '@/lib/utils';
 
 const NAV_ITEMS = [
@@ -73,9 +73,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     <>
       {/* Logo + collapse toggle */}
       <div className={cn('flex items-center px-5 py-5', isCollapsed ? 'justify-center' : 'gap-3')}>
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-button bg-gradient-to-br from-primary to-accent-blue font-heading text-heading-sm text-white">
-          {APP_SHORT_NAME}
-        </div>
+        <img src="/logo.svg" alt={APP_NAME} className="h-9 w-9 shrink-0 rounded-button" />
         {!isCollapsed && (
           <>
             <span className="font-heading text-heading-sm text-white truncate flex-1">
