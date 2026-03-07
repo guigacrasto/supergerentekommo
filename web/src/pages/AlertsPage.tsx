@@ -1,9 +1,11 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import { LiveTimestamp } from '@/components/ui';
 import { TimeFilter } from '@/components/features/filters/TimeFilter';
+import { TagFilter } from '@/components/features/filters/TagFilter';
 import { AlertList } from '@/components/features/alerts/AlertList';
+import type { AlertTab } from '@/components/features/alerts/AlertList';
 import { AlertHistoryModal } from '@/components/features/alerts/AlertHistoryModal';
 import { cn } from '@/lib/utils';
 
@@ -47,18 +49,19 @@ const ALERT_TYPES: Array<{ value: AlertFilter; label: string }> = [
 ];
 
 const STORAGE_KEY_ARCHIVED = 'sg_archived_alerts';
+const STORAGE_KEY_COMPLETED = 'sg_completed_alerts';
 const STORAGE_KEY_HISTORY = 'sg_alert_history';
 
-function loadArchived(): Set<string> {
+function loadSet(key: string): Set<string> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_ARCHIVED);
+    const raw = localStorage.getItem(key);
     if (raw) return new Set(JSON.parse(raw));
   } catch { /* ignore */ }
   return new Set();
 }
 
-function saveArchived(keys: Set<string>) {
-  localStorage.setItem(STORAGE_KEY_ARCHIVED, JSON.stringify([...keys]));
+function saveSet(key: string, s: Set<string>) {
+  localStorage.setItem(key, JSON.stringify([...s]));
 }
 
 function loadHistory(): Record<string, Array<{ type: string; date: string }>> {
@@ -79,8 +82,9 @@ export function AlertsPage() {
   const [lastFetchTime, setLastFetchTime] = useState('');
   const [teamFilter, setTeamFilter] = useState('');
   const [alertFilter, setAlertFilter] = useState<AlertFilter>('todos');
-  const [tab, setTab] = useState<'ativos' | 'arquivados'>('ativos');
-  const [archivedKeys, setArchivedKeys] = useState<Set<string>>(loadArchived);
+  const [tab, setTab] = useState<AlertTab>('ativos');
+  const [archivedKeys, setArchivedKeys] = useState<Set<string>>(() => loadSet(STORAGE_KEY_ARCHIVED));
+  const [completedKeys, setCompletedKeys] = useState<Set<string>>(() => loadSet(STORAGE_KEY_COMPLETED));
   const [alertHistory, setAlertHistory] = useState<Record<string, Array<{ type: string; date: string }>>>(loadHistory);
   const [historyModal, setHistoryModal] = useState<number | null>(null);
 
@@ -93,6 +97,20 @@ export function AlertsPage() {
       const res = await api.get<ActivityTeamData[]>('/reports/activity');
       setData(res.data);
       setLastFetchTime(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+
+      // Auto-remover leads concluidos que voltaram a ter alerta
+      // Se um lead concluido aparece nos alertas novos, remove do concluido
+      const allAlertLeadKeys = new Set<string>();
+      for (const td of res.data) {
+        for (const a of td.activity.leadsAbandonados48h) allAlertLeadKeys.add(`48h-${a.id}`);
+        for (const a of td.activity.leadsEmRisco7d) allAlertLeadKeys.add(`7d-${a.id}`);
+        for (const t of td.activity.tarefasVencidas) allAlertLeadKeys.add(`task-${t.id}`);
+      }
+
+      // Nao precisa remover automaticamente — o lead concluido que continua
+      // no alerta fica como concluido. So volta pra ativo se tiver um NOVO alerta
+      // (com key diferente). A logica eh: se a key do concluido nao existe mais
+      // nos alertas atuais, podemos limpar. Mas se ainda existe, manter.
     } catch (err) {
       console.error('[AlertsPage] Erro ao carregar alertas:', err);
     } finally {
@@ -108,13 +126,32 @@ export function AlertsPage() {
     const newArchived = new Set(archivedKeys);
     newArchived.add(key);
     setArchivedKeys(newArchived);
-    saveArchived(newArchived);
+    saveSet(STORAGE_KEY_ARCHIVED, newArchived);
 
+    // Remove de concluidos se estiver la
+    const newCompleted = new Set(completedKeys);
+    newCompleted.delete(key);
+    setCompletedKeys(newCompleted);
+    saveSet(STORAGE_KEY_COMPLETED, newCompleted);
+
+    addHistoryEntry(leadId, type, 'Arquivado');
+  };
+
+  const handleComplete = (key: string, leadId: number, type: string) => {
+    const newCompleted = new Set(completedKeys);
+    newCompleted.add(key);
+    setCompletedKeys(newCompleted);
+    saveSet(STORAGE_KEY_COMPLETED, newCompleted);
+
+    addHistoryEntry(leadId, type, 'Concluido');
+  };
+
+  const addHistoryEntry = (leadId: number, type: string, action: string) => {
     const newHistory = { ...alertHistory };
     const leadKey = String(leadId);
     if (!newHistory[leadKey]) newHistory[leadKey] = [];
     newHistory[leadKey].push({
-      type,
+      type: `${action}: ${type}`,
       date: new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
     });
     setAlertHistory(newHistory);
@@ -129,6 +166,9 @@ export function AlertsPage() {
   const filteredTeams = data.filter(
     (t) => !teamFilter || t.team === teamFilter
   );
+
+  // Extrair vendedores unicos pra referencia (nao filtramos por vendedor aqui,
+  // mas os dados ficam disponiveis se precisar no futuro)
 
   // Aggregate alerts across teams
   const alerts48h =
@@ -146,6 +186,24 @@ export function AlertsPage() {
       ? filteredTeams.flatMap((t) => t.activity.tarefasVencidas)
       : [];
 
+  // Contadores por tab
+  const countForTab = useMemo(() => {
+    const allKeys: string[] = [];
+    for (const td of filteredTeams) {
+      for (const a of td.activity.leadsAbandonados48h) allKeys.push(`48h-${a.id}`);
+      for (const a of td.activity.leadsEmRisco7d) allKeys.push(`7d-${a.id}`);
+      for (const t of td.activity.tarefasVencidas) allKeys.push(`task-${t.id}`);
+    }
+
+    let concluidos = 0;
+    let arquivados = 0;
+    for (const k of allKeys) {
+      if (completedKeys.has(k)) concluidos++;
+      if (archivedKeys.has(k)) arquivados++;
+    }
+    return { concluidos, arquivados };
+  }, [filteredTeams, completedKeys, archivedKeys]);
+
   const modalHistory = historyModal !== null ? (alertHistory[String(historyModal)] || []) : [];
 
   return (
@@ -155,6 +213,7 @@ export function AlertsPage() {
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-4">
         <TimeFilter teams={userTeams} selected={teamFilter} onChange={setTeamFilter} />
+        <TagFilter />
 
         <div className="flex items-center gap-1.5">
           {ALERT_TYPES.map(({ value, label }) => (
@@ -174,7 +233,7 @@ export function AlertsPage() {
         </div>
       </div>
 
-      {/* Tabs: Ativos / Arquivados */}
+      {/* Tabs: Ativos / Concluidos / Arquivados */}
       <div className="flex items-center gap-1 border-b border-glass-border">
         <button
           onClick={() => setTab('ativos')}
@@ -188,6 +247,22 @@ export function AlertsPage() {
           Ativos
         </button>
         <button
+          onClick={() => setTab('concluidos')}
+          className={cn(
+            'px-4 py-2.5 text-body-md font-medium border-b-2 transition-colors cursor-pointer',
+            tab === 'concluidos'
+              ? 'border-success text-success'
+              : 'border-transparent text-muted hover:text-foreground'
+          )}
+        >
+          Concluidos
+          {countForTab.concluidos > 0 && (
+            <span className="ml-1.5 inline-flex items-center justify-center h-5 min-w-[20px] px-1 rounded-full bg-success/10 text-xs text-success">
+              {countForTab.concluidos}
+            </span>
+          )}
+        </button>
+        <button
           onClick={() => setTab('arquivados')}
           className={cn(
             'px-4 py-2.5 text-body-md font-medium border-b-2 transition-colors cursor-pointer',
@@ -197,9 +272,9 @@ export function AlertsPage() {
           )}
         >
           Arquivados
-          {archivedKeys.size > 0 && (
+          {countForTab.arquivados > 0 && (
             <span className="ml-1.5 inline-flex items-center justify-center h-5 min-w-[20px] px-1 rounded-full bg-surface-secondary text-xs text-muted">
-              {archivedKeys.size}
+              {countForTab.arquivados}
             </span>
           )}
         </button>
@@ -215,10 +290,12 @@ export function AlertsPage() {
           alerts7d={alerts7d}
           tarefas={tarefas}
           archivedKeys={archivedKeys}
+          completedKeys={completedKeys}
           alertHistory={alertHistory}
           onArchive={handleArchive}
+          onComplete={handleComplete}
           onCountClick={handleCountClick}
-          showArchived={tab === 'arquivados'}
+          tab={tab}
         />
       )}
 

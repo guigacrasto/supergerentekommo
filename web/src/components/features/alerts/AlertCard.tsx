@@ -1,4 +1,4 @@
-import { AlertTriangle, Clock, ListChecks, Archive } from 'lucide-react';
+import { AlertTriangle, Clock, ListChecks, Archive, Check } from 'lucide-react';
 import { Badge } from '@/components/ui';
 import type { LucideIcon } from 'lucide-react';
 
@@ -29,6 +29,7 @@ interface AlertCardProps {
   severity: 'danger' | 'warning' | 'info';
   alertCount?: number;
   onArchive?: () => void;
+  onComplete?: () => void;
   onCountClick?: () => void;
 }
 
@@ -40,6 +41,7 @@ export function AlertCard({
   severity,
   alertCount,
   onArchive,
+  onComplete,
   onCountClick,
 }: AlertCardProps) {
   const config = severityConfig[severity];
@@ -77,6 +79,15 @@ export function AlertCard({
         <Badge variant={config.badgeVariant} className="flex-shrink-0">
           {tempo}
         </Badge>
+        {onComplete && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onComplete(); }}
+            className="opacity-0 group-hover:opacity-100 p-1 rounded-button text-muted hover:text-success hover:bg-success/10 transition-all cursor-pointer"
+            title="Marcar como concluido"
+          >
+            <Check className="h-4 w-4" />
+          </button>
+        )}
         {onArchive && (
           <button
             onClick={(e) => { e.stopPropagation(); onArchive(); }}

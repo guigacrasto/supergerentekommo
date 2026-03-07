@@ -25,15 +25,19 @@ interface RawAlertTask {
   kommoUrl: string;
 }
 
+export type AlertTab = 'ativos' | 'concluidos' | 'arquivados';
+
 interface AlertListProps {
   alerts48h: RawAlertLead[];
   alerts7d: RawAlertLead[];
   tarefas: RawAlertTask[];
   archivedKeys: Set<string>;
+  completedKeys: Set<string>;
   alertHistory: Record<string, Array<{ type: string; date: string }>>;
   onArchive: (key: string, leadId: number, type: string) => void;
+  onComplete: (key: string, leadId: number, type: string) => void;
   onCountClick: (leadId: number) => void;
-  showArchived: boolean;
+  tab: AlertTab;
 }
 
 interface SectionConfig {
@@ -68,10 +72,12 @@ function CollapsibleSection({
   config,
   items,
   archivedKeys,
+  completedKeys,
   alertHistory,
   onArchive,
+  onComplete,
   onCountClick,
-  showArchived,
+  tab,
 }: {
   config: SectionConfig;
   items: Array<{
@@ -84,16 +90,22 @@ function CollapsibleSection({
     type: string;
   }>;
   archivedKeys: Set<string>;
+  completedKeys: Set<string>;
   alertHistory: Record<string, Array<{ type: string; date: string }>>;
   onArchive: (key: string, leadId: number, type: string) => void;
+  onComplete: (key: string, leadId: number, type: string) => void;
   onCountClick: (leadId: number) => void;
-  showArchived: boolean;
+  tab: AlertTab;
 }) {
-  const [collapsed, setCollapsed] = useState(false);
+  // Padrao: secoes retraidas (collapsed = true)
+  const [collapsed, setCollapsed] = useState(true);
 
-  const filteredItems = showArchived
-    ? items.filter((item) => archivedKeys.has(item.key))
-    : items.filter((item) => !archivedKeys.has(item.key));
+  const filteredItems = items.filter((item) => {
+    if (tab === 'arquivados') return archivedKeys.has(item.key);
+    if (tab === 'concluidos') return completedKeys.has(item.key);
+    // Ativos: nao esta nem arquivado nem concluido
+    return !archivedKeys.has(item.key) && !completedKeys.has(item.key);
+  });
 
   if (filteredItems.length === 0) return null;
 
@@ -121,6 +133,7 @@ function CollapsibleSection({
         <div className="flex flex-col gap-2 p-4">
           {filteredItems.map((item) => {
             const leadHistory = alertHistory[String(item.leadId)] || [];
+            const showActions = tab === 'ativos';
             return (
               <AlertCard
                 key={item.key}
@@ -130,7 +143,8 @@ function CollapsibleSection({
                 kommoUrl={item.kommoUrl}
                 severity={config.severity}
                 alertCount={leadHistory.length}
-                onArchive={showArchived ? undefined : () => onArchive(item.key, item.leadId, item.type)}
+                onArchive={showActions ? () => onArchive(item.key, item.leadId, item.type) : undefined}
+                onComplete={showActions ? () => onComplete(item.key, item.leadId, item.type) : undefined}
                 onCountClick={leadHistory.length > 0 ? () => onCountClick(item.leadId) : undefined}
               />
             );
@@ -146,10 +160,12 @@ export function AlertList({
   alerts7d,
   tarefas,
   archivedKeys,
+  completedKeys,
   alertHistory,
   onArchive,
+  onComplete,
   onCountClick,
-  showArchived,
+  tab,
 }: AlertListProps) {
   const now = Math.floor(Date.now() / 1000);
 
@@ -193,24 +209,29 @@ export function AlertList({
   ];
 
   const hasItems = sectionData.some((s) => {
-    const filtered = showArchived
-      ? s.items.filter((item) => archivedKeys.has(item.key))
-      : s.items.filter((item) => !archivedKeys.has(item.key));
+    const filtered = s.items.filter((item) => {
+      if (tab === 'arquivados') return archivedKeys.has(item.key);
+      if (tab === 'concluidos') return completedKeys.has(item.key);
+      return !archivedKeys.has(item.key) && !completedKeys.has(item.key);
+    });
     return filtered.length > 0;
   });
 
   if (!hasItems) {
+    const emptyMessages: Record<AlertTab, { title: string; desc: string }> = {
+      ativos: { title: 'Tudo em dia!', desc: 'Nenhum alerta ativo no momento.' },
+      concluidos: { title: 'Nenhum alerta concluido', desc: 'Alertas marcados como concluidos aparecerão aqui.' },
+      arquivados: { title: 'Nenhum alerta arquivado', desc: 'Alertas arquivados aparecerão aqui.' },
+    };
+    const msg = emptyMessages[tab];
+
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <div className="mb-4 rounded-card bg-success/10 p-4">
           <CheckCircle2 className="h-10 w-10 text-success" />
         </div>
-        <h3 className="font-heading text-heading-sm mb-1">
-          {showArchived ? 'Nenhum alerta arquivado' : 'Tudo em dia!'}
-        </h3>
-        <p className="text-body-md text-muted">
-          {showArchived ? 'Seus alertas arquivados aparecerão aqui.' : 'Nenhum alerta ativo no momento.'}
-        </p>
+        <h3 className="font-heading text-heading-sm mb-1">{msg.title}</h3>
+        <p className="text-body-md text-muted">{msg.desc}</p>
       </div>
     );
   }
@@ -223,10 +244,12 @@ export function AlertList({
           config={config}
           items={items}
           archivedKeys={archivedKeys}
+          completedKeys={completedKeys}
           alertHistory={alertHistory}
           onArchive={onArchive}
+          onComplete={onComplete}
           onCountClick={onCountClick}
-          showArchived={showArchived}
+          tab={tab}
         />
       ))}
     </div>
