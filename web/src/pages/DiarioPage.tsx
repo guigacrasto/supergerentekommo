@@ -117,7 +117,7 @@ export function DiarioPage() {
       </div>
 
       {/* KPI Cards — Row 1: Dia | Row 2: Mês */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
         <KPICard
           label="Leads Dia"
           value={totals.leadsDia}

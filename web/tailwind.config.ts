@@ -66,6 +66,18 @@ export default {
       },
       animation: {
         'spin-slow': 'spin 1.5s linear infinite',
+        'slide-in-left': 'slideInLeft 0.2s ease-out',
+        'fade-in': 'fadeIn 0.2s ease-out',
+      },
+      keyframes: {
+        slideInLeft: {
+          from: { transform: 'translateX(-100%)' },
+          to: { transform: 'translateX(0)' },
+        },
+        fadeIn: {
+          from: { opacity: '0' },
+          to: { opacity: '1' },
+        },
       },
     },
   },

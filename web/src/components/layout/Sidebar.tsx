@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   PieChart,
   CalendarDays,
@@ -18,6 +18,7 @@ import {
   ChevronDown,
   ChevronsLeft,
   ChevronsRight,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
@@ -43,7 +44,7 @@ const ADMIN_NAV_ITEMS = [
   { to: '/insights', label: 'Insights', icon: Brain },
 ] as const;
 
-export function Sidebar() {
+function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const { collapsed, toggle } = useSidebarStore();
@@ -51,41 +52,47 @@ export function Sidebar() {
   const navigate = useNavigate();
   const [expandedTeams, setExpandedTeams] = useState<Record<string, boolean>>({});
 
+  // On mobile, collapsed is always false (full sidebar)
+  const isMobile = onNavigate !== undefined;
+  const isCollapsed = isMobile ? false : collapsed;
+
   const toggleTeam = (team: string) =>
     setExpandedTeams((prev) => ({ ...prev, [team]: !prev[team] }));
 
   const handleLogout = () => {
     logout();
     navigate('/login');
+    onNavigate?.();
+  };
+
+  const handleNavClick = () => {
+    onNavigate?.();
   };
 
   return (
-    <aside
-      className={cn(
-        'relative flex h-screen flex-col bg-sidebar text-white transition-[width] duration-200 ease-out',
-        collapsed ? 'w-[68px]' : 'w-[260px]'
-      )}
-    >
+    <>
       {/* Logo + collapse toggle */}
-      <div className={cn('flex items-center px-5 py-5', collapsed ? 'justify-center' : 'gap-3')}>
+      <div className={cn('flex items-center px-5 py-5', isCollapsed ? 'justify-center' : 'gap-3')}>
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-button bg-gradient-to-br from-primary to-accent-blue font-heading text-heading-sm text-white">
           {APP_SHORT_NAME}
         </div>
-        {!collapsed && (
+        {!isCollapsed && (
           <>
             <span className="font-heading text-heading-sm text-white truncate flex-1">
               {APP_NAME}
             </span>
-            <button
-              onClick={toggle}
-              title="Recolher menu"
-              className="flex items-center justify-center rounded-button p-1.5 text-white/50 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
-            >
-              <ChevronsLeft className="h-4 w-4" />
-            </button>
+            {!isMobile && (
+              <button
+                onClick={toggle}
+                title="Recolher menu"
+                className="flex items-center justify-center rounded-button p-1.5 text-white/50 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+              >
+                <ChevronsLeft className="h-4 w-4" />
+              </button>
+            )}
           </>
         )}
-        {collapsed && (
+        {isCollapsed && !isMobile && (
           <button
             onClick={toggle}
             title="Expandir menu"
@@ -104,11 +111,12 @@ export function Sidebar() {
               <NavLink
                 to={to}
                 end={to === '/'}
-                title={collapsed ? label : undefined}
+                onClick={handleNavClick}
+                title={isCollapsed ? label : undefined}
                 className={({ isActive }) =>
                   cn(
                     'flex items-center rounded-button px-3 py-2.5 text-body-md font-medium transition-colors duration-150',
-                    collapsed ? 'justify-center' : 'gap-3',
+                    isCollapsed ? 'justify-center' : 'gap-3',
                     isActive
                       ? 'border-l-2 border-primary bg-primary/20 text-white'
                       : 'text-white/70 hover:bg-white/10 hover:text-white'
@@ -116,7 +124,7 @@ export function Sidebar() {
                 }
               >
                 <Icon className="h-5 w-5 shrink-0" />
-                {!collapsed && label}
+                {!isCollapsed && label}
               </NavLink>
             </li>
           ))}
@@ -126,11 +134,12 @@ export function Sidebar() {
             <li key={to}>
               <NavLink
                 to={to}
-                title={collapsed ? label : undefined}
+                onClick={handleNavClick}
+                title={isCollapsed ? label : undefined}
                 className={({ isActive }) =>
                   cn(
                     'flex items-center rounded-button px-3 py-2.5 text-body-md font-medium transition-colors duration-150',
-                    collapsed ? 'justify-center' : 'gap-3',
+                    isCollapsed ? 'justify-center' : 'gap-3',
                     isActive
                       ? 'border-l-2 border-primary bg-primary/20 text-white'
                       : 'text-white/70 hover:bg-white/10 hover:text-white'
@@ -138,7 +147,7 @@ export function Sidebar() {
                 }
               >
                 <Icon className="h-5 w-5 shrink-0" />
-                {!collapsed && label}
+                {!isCollapsed && label}
               </NavLink>
             </li>
           ))}
@@ -148,11 +157,12 @@ export function Sidebar() {
             <li>
               <NavLink
                 to="/admin"
-                title={collapsed ? 'Admin' : undefined}
+                onClick={handleNavClick}
+                title={isCollapsed ? 'Admin' : undefined}
                 className={({ isActive }) =>
                   cn(
                     'flex items-center rounded-button px-3 py-2.5 text-body-md font-medium transition-colors duration-150',
-                    collapsed ? 'justify-center' : 'gap-3',
+                    isCollapsed ? 'justify-center' : 'gap-3',
                     isActive
                       ? 'border-l-2 border-primary bg-primary/20 text-white'
                       : 'text-white/70 hover:bg-white/10 hover:text-white'
@@ -160,14 +170,14 @@ export function Sidebar() {
                 }
               >
                 <Settings className="h-5 w-5 shrink-0" />
-                {!collapsed && 'Admin'}
+                {!isCollapsed && 'Admin'}
               </NavLink>
             </li>
           )}
         </ul>
 
         {/* Team accordion sections — hidden when collapsed */}
-        {!collapsed && (
+        {!isCollapsed && (
           <div className="mt-6 space-y-2">
             {(['azul', 'amarela'] as const).map((team) => {
               const teamPipelines = byTeam(team);
@@ -192,7 +202,10 @@ export function Sidebar() {
                       <li>
                         <button
                           type="button"
-                          onClick={() => navigate(`/team/${team}`)}
+                          onClick={() => {
+                            navigate(`/team/${team}`);
+                            onNavigate?.();
+                          }}
                           className="block w-full text-left rounded-button px-3 py-1.5 text-body-sm text-primary font-heading font-semibold hover:bg-white/10 transition-colors cursor-pointer"
                         >
                           Todos
@@ -204,6 +217,7 @@ export function Sidebar() {
                             type="button"
                             onClick={() => {
                               navigate(`/team/${team}?pipeline=${encodeURIComponent(stripFunilPrefix(p.name))}`);
+                              onNavigate?.();
                             }}
                             className="block w-full text-left rounded-button px-3 py-1.5 text-body-sm text-white/60 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
                           >
@@ -222,19 +236,65 @@ export function Sidebar() {
 
       {/* Footer */}
       <div className="border-t border-white/10 px-3 py-3 space-y-1">
-        {/* Logout */}
         <button
           onClick={handleLogout}
-          title={collapsed ? 'Sair' : undefined}
+          title={isCollapsed ? 'Sair' : undefined}
           className={cn(
             'flex w-full items-center rounded-button px-3 py-2 text-body-md text-white/70 hover:bg-white/10 hover:text-white transition-colors cursor-pointer',
-            collapsed ? 'justify-center' : 'gap-3'
+            isCollapsed ? 'justify-center' : 'gap-3'
           )}
         >
           <LogOut className="h-5 w-5 shrink-0" />
-          {!collapsed && 'Sair'}
+          {!isCollapsed && 'Sair'}
         </button>
       </div>
-    </aside>
+    </>
+  );
+}
+
+export function Sidebar() {
+  const { collapsed, mobileOpen, closeMobile } = useSidebarStore();
+  const location = useLocation();
+
+  // Close mobile sidebar on route change
+  useEffect(() => {
+    closeMobile();
+  }, [location.pathname, closeMobile]);
+
+  return (
+    <>
+      {/* Desktop sidebar — hidden on mobile */}
+      <aside
+        className={cn(
+          'relative hidden md:flex h-screen flex-col bg-sidebar text-white transition-[width] duration-200 ease-out',
+          collapsed ? 'w-[68px]' : 'w-[260px]'
+        )}
+      >
+        <SidebarContent />
+      </aside>
+
+      {/* Mobile overlay + drawer */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in"
+            onClick={closeMobile}
+          />
+          {/* Drawer */}
+          <aside className="relative flex h-full w-[280px] flex-col bg-sidebar text-white shadow-2xl animate-slide-in-left">
+            {/* Close button */}
+            <button
+              onClick={closeMobile}
+              className="absolute top-4 right-4 flex items-center justify-center rounded-button p-1.5 text-white/50 hover:bg-white/10 hover:text-white transition-colors cursor-pointer z-10"
+              aria-label="Fechar menu"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <SidebarContent onNavigate={closeMobile} />
+          </aside>
+        </div>
+      )}
+    </>
   );
 }

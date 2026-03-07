@@ -835,13 +835,35 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
     }
   });
 
-  // GET /api/reports/ddd?from=YYYY-MM-DD&to=YYYY-MM-DD — Leads por DDD (código de área)
+  // DDD → Estado brasileiro
+  const DDD_TO_ESTADO: Record<string, string> = {
+    "11": "SP", "12": "SP", "13": "SP", "14": "SP", "15": "SP",
+    "16": "SP", "17": "SP", "18": "SP", "19": "SP",
+    "21": "RJ", "22": "RJ", "24": "RJ",
+    "27": "ES", "28": "ES",
+    "31": "MG", "32": "MG", "33": "MG", "34": "MG", "35": "MG", "37": "MG", "38": "MG",
+    "41": "PR", "42": "PR", "43": "PR", "44": "PR", "45": "PR", "46": "PR",
+    "47": "SC", "48": "SC", "49": "SC",
+    "51": "RS", "53": "RS", "54": "RS", "55": "RS",
+    "61": "DF", "62": "GO", "63": "TO", "64": "GO",
+    "65": "MT", "66": "MT", "67": "MS",
+    "68": "AC", "69": "RO",
+    "71": "BA", "73": "BA", "74": "BA", "75": "BA", "77": "BA",
+    "79": "SE",
+    "81": "PE", "82": "AL", "83": "PB", "84": "RN",
+    "85": "CE", "86": "PI", "87": "PE", "88": "CE", "89": "PI",
+    "91": "PA", "92": "AM", "93": "PA", "94": "PA",
+    "95": "RR", "96": "AP", "97": "AM", "98": "MA", "99": "MA",
+  };
+
+  // GET /api/reports/ddd?from=YYYY-MM-DD&to=YYYY-MM-DD&estado=XX — Leads por DDD (código de área)
   router.get("/ddd", async (req: AuthRequest, res) => {
     const { fromTs, toTs } = parseDateRange(req.query);
     const STATUS_WON = 142;
     const teamFilter = typeof req.query.team === "string" ? req.query.team : "";
     const groupFilter = typeof req.query.group === "string" ? req.query.group : "";
     const funilFilter = typeof req.query.funil === "string" ? req.query.funil : "";
+    const estadoFilter = typeof req.query.estado === "string" ? req.query.estado : "";
 
     try {
       const allMetrics = await getFilteredMetrics(req);
@@ -850,7 +872,6 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
 
       // Helper: extract phone from lead or contact custom fields
       function getPhone(lead: any, contactCfByLead: Record<number, any[]>): string | null {
-        // Try lead custom fields
         if (lead.custom_fields_values) {
           for (const cf of lead.custom_fields_values) {
             if (cf.field_code === "PHONE" || /phone|telefone|celular/i.test(cf.field_name || "")) {
@@ -859,7 +880,6 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
             }
           }
         }
-        // Try contact custom fields
         const contactCfs = contactCfByLead[lead.id];
         if (!contactCfs) return null;
         for (const cf of contactCfs) {
@@ -874,11 +894,9 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
       // Helper: extract DDD from Brazilian phone number
       function extractDDD(phone: string): string | null {
         const digits = phone.replace(/\D/g, "");
-        // +55 XX XXXXX-XXXX → DDD = XX
         if (digits.startsWith("55") && digits.length >= 12) {
           return digits.substring(2, 4);
         }
-        // XX XXXXX-XXXX (no country code)
         if (digits.length >= 10 && digits.length <= 11) {
           return digits.substring(0, 2);
         }
@@ -921,6 +939,11 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
       for (const lead of leads) {
         const ddd = lead.phone ? extractDDD(lead.phone) : null;
         const key = ddd || "Não identificado";
+        const estado = DDD_TO_ESTADO[key] || "";
+
+        // Apply estado filter
+        if (estadoFilter && estado !== estadoFilter) continue;
+
         if (!dddMap[key]) {
           dddMap[key] = { volume: 0, fechamentos: 0, totalPrice: 0 };
         }
@@ -931,9 +954,19 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
         }
       }
 
+      // Collect unique estados from all DDDs (before filter, for the dropdown)
+      const allEstados = new Set<string>();
+      for (const lead of leads) {
+        const ddd = lead.phone ? extractDDD(lead.phone) : null;
+        if (ddd && DDD_TO_ESTADO[ddd]) {
+          allEstados.add(DDD_TO_ESTADO[ddd]);
+        }
+      }
+
       const ddds = Object.entries(dddMap)
         .map(([ddd, data]) => ({
           ddd,
+          estado: DDD_TO_ESTADO[ddd] || "",
           volume: data.volume,
           fechamentos: data.fechamentos,
           conversao: data.volume > 0
@@ -945,7 +978,12 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
         }))
         .sort((a, b) => b.volume - a.volume);
 
-      res.json({ ddds, funis: Array.from(allFunilNames).sort(), grupos: Array.from(allGroups).sort() });
+      res.json({
+        ddds,
+        funis: Array.from(allFunilNames).sort(),
+        grupos: Array.from(allGroups).sort(),
+        estados: Array.from(allEstados).sort(),
+      });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
