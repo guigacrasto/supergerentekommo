@@ -297,6 +297,7 @@ export class KommoService {
                     params: {
                         limit: limit,
                         page: page,
+                        with: "custom_fields_values",
                         filter: params.filter,
                         sort: params.sort
                     }

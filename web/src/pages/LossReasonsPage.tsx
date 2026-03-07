@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { CalendarDays, XCircle } from 'lucide-react';
+import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import { useFilterStore } from '@/stores/filterStore';
@@ -30,6 +31,12 @@ interface LossReasonsData {
   agentes: string[];
   grupos: string[];
 }
+
+const PIE_COLORS = [
+  '#9566F2', '#E05D6F', '#4ECDC4', '#FFE66D', '#FF6B6B',
+  '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#87CEEB',
+  '#FF8C42', '#98D8C8', '#F7DC6F', '#BB8FCE', '#82E0AA',
+];
 
 function getDefaultFrom(): string {
   const d = new Date();
@@ -82,6 +89,11 @@ export function LossReasonsPage() {
   const grupos = data?.grupos ?? [];
   const motivos = data?.motivos ?? [];
 
+  const pieData = motivos.map((m) => ({
+    name: m.nome,
+    value: m.count,
+  }));
+
   return (
     <div className="flex flex-col gap-6">
       <LiveTimestamp timestamp={lastFetchTime} />
@@ -123,54 +135,61 @@ export function LossReasonsPage() {
         />
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto rounded-card border border-glass-border bg-surface">
-        <table className="w-full">
-          <thead>
-            <tr className="bg-surface-secondary text-muted text-body-sm">
-              <th className="px-4 py-3 text-left font-medium">Motivo</th>
-              <th className="px-4 py-3 text-right font-medium">Volume</th>
-              <th className="px-4 py-3 text-right font-medium">% do Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <tr key={i}>
-                  <td className="border-t border-glass-border px-4 py-3">
-                    <Skeleton className="h-5 w-40" />
-                  </td>
-                  <td className="border-t border-glass-border px-4 py-3 text-right">
-                    <Skeleton className="ml-auto h-5 w-12" />
-                  </td>
-                  <td className="border-t border-glass-border px-4 py-3 text-right">
-                    <Skeleton className="ml-auto h-5 w-16" />
-                  </td>
-                </tr>
-              ))
-            ) : motivos.length === 0 ? (
-              <tr>
-                <td colSpan={3} className="border-t border-glass-border px-4 py-8 text-center text-muted text-body-md">
-                  Nenhum dado encontrado no per&iacute;odo selecionado.
-                </td>
-              </tr>
-            ) : (
-              motivos.map((motivo) => (
-                <tr key={motivo.loss_reason_id} className="hover:bg-surface-secondary/50 transition-colors">
-                  <td className="border-t border-glass-border px-4 py-3 text-body-md text-foreground font-medium">
-                    {motivo.nome}
-                  </td>
-                  <td className="border-t border-glass-border px-4 py-3 text-right text-body-md text-foreground">
-                    {motivo.count}
-                  </td>
-                  <td className="border-t border-glass-border px-4 py-3 text-right text-body-md text-foreground">
-                    {motivo.pct}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+      {/* Pie Chart */}
+      <div className="rounded-card border border-glass-border bg-surface p-6">
+        {loading ? (
+          <div className="flex items-center justify-center h-[400px]">
+            <Skeleton className="h-64 w-64 rounded-full" />
+          </div>
+        ) : motivos.length === 0 ? (
+          <div className="flex items-center justify-center h-[300px] text-muted text-body-md">
+            Nenhum dado encontrado no per&iacute;odo selecionado.
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={420}>
+            <PieChart>
+              <Pie
+                data={pieData}
+                cx="50%"
+                cy="50%"
+                outerRadius={140}
+                innerRadius={60}
+                dataKey="value"
+                nameKey="name"
+                paddingAngle={2}
+                label={({ name, percent }) =>
+                  `${name} (${((percent ?? 0) * 100).toFixed(1)}%)`
+                }
+                labelLine={{ stroke: '#6B7280' }}
+              >
+                {pieData.map((_, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={PIE_COLORS[index % PIE_COLORS.length]}
+                  />
+                ))}
+              </Pie>
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#22182D',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '8px',
+                  color: '#fff',
+                }}
+                itemStyle={{ color: '#fff' }}
+                labelStyle={{ color: '#fff' }}
+                formatter={(value) => [`${value} leads`, 'Volume']}
+              />
+              <Legend
+                layout="vertical"
+                align="right"
+                verticalAlign="middle"
+                iconType="circle"
+                wrapperStyle={{ color: '#E0E3E9', fontSize: '13px' }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        )}
       </div>
     </div>
   );

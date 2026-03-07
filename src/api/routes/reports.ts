@@ -641,6 +641,7 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
     const rendaPattern = /renda/i;
     const teamFilter = typeof req.query.team === "string" ? req.query.team : "";
     const groupFilter = typeof req.query.group === "string" ? req.query.group : "";
+    const funilFilter = typeof req.query.funil === "string" ? req.query.funil : "";
 
     const brackets: Array<{ label: string; min: number; max: number }> = [
       { label: "Até R$ 2.000", min: 0, max: 2000 },
@@ -661,12 +662,22 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
         price: number;
         renda: string | null;
       }> = [];
+      let pipelineNamesMap: Record<number, string> = {};
+      const allFunilNames = new Set<string>();
 
       for (const { team, metrics } of allMetrics) {
         if (teamFilter && team !== teamFilter) continue;
+        Object.assign(pipelineNamesMap, metrics.pipelineNames);
+        for (const v of metrics.vendedores) {
+          allFunilNames.add(v.funil.replace(/^FUNIL\s+/i, ""));
+        }
         for (const lead of metrics.leadSnapshots) {
           if (lead.created_at >= fromTs && lead.created_at <= toTs) {
             if (groupUserIds && !groupUserIds.has(lead.responsible_user_id)) continue;
+            if (funilFilter) {
+              const pName = (pipelineNamesMap[lead.pipeline_id] || "").replace(/^FUNIL\s+/i, "");
+              if (pName !== funilFilter) continue;
+            }
             leads.push({
               status_id: lead.status_id,
               price: lead.price || 0,
@@ -718,7 +729,7 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
         };
       });
 
-      res.json({ faixas, grupos: Array.from(allGroups).sort() });
+      res.json({ faixas, funis: Array.from(allFunilNames).sort(), grupos: Array.from(allGroups).sort() });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -731,6 +742,7 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
     const profissaoPattern = /profiss[aã]o/i;
     const teamFilter = typeof req.query.team === "string" ? req.query.team : "";
     const groupFilter = typeof req.query.group === "string" ? req.query.group : "";
+    const funilFilter = typeof req.query.funil === "string" ? req.query.funil : "";
 
     try {
       const allMetrics = await getFilteredMetrics(req);
@@ -743,12 +755,22 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
         price: number;
         profissao: string | null;
       }> = [];
+      let pipelineNamesMap: Record<number, string> = {};
+      const allFunilNames = new Set<string>();
 
       for (const { team, metrics } of allMetrics) {
         if (teamFilter && team !== teamFilter) continue;
+        Object.assign(pipelineNamesMap, metrics.pipelineNames);
+        for (const v of metrics.vendedores) {
+          allFunilNames.add(v.funil.replace(/^FUNIL\s+/i, ""));
+        }
         for (const lead of metrics.leadSnapshots) {
           if (lead.created_at >= fromTs && lead.created_at <= toTs) {
             if (groupUserIds && !groupUserIds.has(lead.responsible_user_id)) continue;
+            if (funilFilter) {
+              const pName = (pipelineNamesMap[lead.pipeline_id] || "").replace(/^FUNIL\s+/i, "");
+              if (pName !== funilFilter) continue;
+            }
             leads.push({
               status_id: lead.status_id,
               price: lead.price || 0,
@@ -788,7 +810,7 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
         .sort((a, b) => b.volume - a.volume)
         .slice(0, 20);
 
-      res.json({ profissoes, grupos: Array.from(allGroups).sort() });
+      res.json({ profissoes, funis: Array.from(allFunilNames).sort(), grupos: Array.from(allGroups).sort() });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

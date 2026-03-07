@@ -35,6 +35,9 @@ const NAV_ITEMS = [
   { to: '/chat', label: 'Chat IA', icon: MessageSquare },
   { to: '/agents', label: 'Agentes', icon: Headset },
   { to: '/alerts', label: 'Alertas', icon: AlertTriangle },
+] as const;
+
+const ADMIN_NAV_ITEMS = [
   { to: '/insights', label: 'Insights', icon: Brain },
 ] as const;
 
@@ -99,6 +102,28 @@ export function Sidebar() {
               <NavLink
                 to={to}
                 end={to === '/'}
+                title={collapsed ? label : undefined}
+                className={({ isActive }) =>
+                  cn(
+                    'flex items-center rounded-button px-3 py-2.5 text-body-md font-medium transition-colors duration-150',
+                    collapsed ? 'justify-center' : 'gap-3',
+                    isActive
+                      ? 'border-l-2 border-primary bg-primary/20 text-white'
+                      : 'text-white/70 hover:bg-white/10 hover:text-white'
+                  )
+                }
+              >
+                <Icon className="h-5 w-5 shrink-0" />
+                {!collapsed && label}
+              </NavLink>
+            </li>
+          ))}
+
+          {/* Admin-only nav items */}
+          {user?.role === 'admin' && ADMIN_NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+            <li key={to}>
+              <NavLink
+                to={to}
                 title={collapsed ? label : undefined}
                 className={({ isActive }) =>
                   cn(

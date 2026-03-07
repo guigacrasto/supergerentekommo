@@ -2,8 +2,10 @@ import { useEffect, useState, useCallback } from 'react';
 import { CalendarDays } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
+import { useFilterStore } from '@/stores/filterStore';
 import { Skeleton, LiveTimestamp } from '@/components/ui';
 import { TagFilter } from '@/components/features/filters/TagFilter';
+import { FunilFilter } from '@/components/features/filters/FunilFilter';
 import { TimeFilter } from '@/components/features/filters/TimeFilter';
 import { GroupFilter } from '@/components/features/filters/GroupFilter';
 
@@ -17,6 +19,7 @@ interface IncomeRow {
 
 interface IncomeData {
   faixas: IncomeRow[];
+  funis: string[];
   grupos: string[];
 }
 
@@ -32,6 +35,7 @@ function getToday(): string {
 
 export function RendaPage() {
   const user = useAuthStore((s) => s.user);
+  const selectedFunil = useFilterStore((s) => s.selectedFunil);
   const [data, setData] = useState<IncomeData | null>(null);
   const [loading, setLoading] = useState(true);
   const [from, setFrom] = useState(getDefaultFrom);
@@ -42,10 +46,11 @@ export function RendaPage() {
 
   const userTeams = user?.teams ?? [];
 
-  const fetchData = useCallback(async (fromDate: string, toDate: string, team: string, group: string) => {
+  const fetchData = useCallback(async (fromDate: string, toDate: string, funil: string, team: string, group: string) => {
     try {
       setLoading(true);
       const params: Record<string, string> = { from: fromDate, to: toDate };
+      if (funil) params.funil = funil;
       if (team) params.team = team;
       if (group) params.group = group;
       const res = await api.get<IncomeData>('/reports/income', { params });
@@ -59,10 +64,11 @@ export function RendaPage() {
   }, []);
 
   useEffect(() => {
-    fetchData(from, to, teamFilter, groupFilter);
-  }, [from, to, teamFilter, groupFilter, fetchData]);
+    fetchData(from, to, selectedFunil, teamFilter, groupFilter);
+  }, [from, to, selectedFunil, teamFilter, groupFilter, fetchData]);
 
   const faixas = data?.faixas ?? [];
+  const funis = data?.funis ?? [];
   const grupos = data?.grupos ?? [];
 
   return (
@@ -90,6 +96,7 @@ export function RendaPage() {
 
         <TimeFilter teams={userTeams} selected={teamFilter} onChange={(t) => { setTeamFilter(t); setGroupFilter(''); }} />
         <GroupFilter grupos={grupos} selected={groupFilter} onChange={setGroupFilter} />
+        <FunilFilter funis={funis} />
         <TagFilter />
       </div>
 

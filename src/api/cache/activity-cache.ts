@@ -7,6 +7,7 @@ export interface AlertLead {
   nome: string;
   vendedor: string;
   diasSemAtividade: number;
+  updatedAt: number;
   kommoUrl: string;
 }
 
@@ -17,6 +18,7 @@ export interface AlertTask {
   leadId: number;
   leadNome: string;
   diasVencida: number;
+  completeTill: number;
   kommoUrl: string;
 }
 
@@ -27,7 +29,7 @@ export interface ActivityMetrics {
   atualizadoEm: string;
 }
 
-const ACTIVITY_CACHE_TTL_MS = 30 * 60 * 1000;
+const ACTIVITY_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutos
 
 interface ActivityCacheEntry {
   metrics: ActivityMetrics | null;
@@ -62,12 +64,12 @@ async function fetchActivity(
       nome: l.titulo,
       vendedor: l.responsibleUserName,
       diasSemAtividade: Math.floor((now - l.updatedAt) / 86400),
+      updatedAt: l.updatedAt,
       kommoUrl: `https://${subdomain}.kommo.com/leads/detail/${l.id}`,
     }))
-    .sort((a, b) => b.diasSemAtividade - a.diasSemAtividade)
-    .slice(0, 30);
+    .sort((a, b) => b.diasSemAtividade - a.diasSemAtividade);
 
-  // Leads without activity for 7+ days (critical tier — exclusive of the 48h bucket)
+  // Leads without activity for 7+ days (critical tier)
   const leadsEmRisco7d: AlertLead[] = activeLeads
     .filter((l) => l.updatedAt < cutoff7d)
     .map((l) => ({
@@ -75,10 +77,10 @@ async function fetchActivity(
       nome: l.titulo,
       vendedor: l.responsibleUserName,
       diasSemAtividade: Math.floor((now - l.updatedAt) / 86400),
+      updatedAt: l.updatedAt,
       kommoUrl: `https://${subdomain}.kommo.com/leads/detail/${l.id}`,
     }))
-    .sort((a, b) => b.diasSemAtividade - a.diasSemAtividade)
-    .slice(0, 30);
+    .sort((a, b) => b.diasSemAtividade - a.diasSemAtividade);
 
   // Overdue tasks — paginated fetch
   let tarefasVencidas: AlertTask[] = [];
@@ -95,8 +97,8 @@ async function fetchActivity(
       if (pageTasks.length === 0) break;
       tasks.push(...pageTasks);
       if (pageTasks.length < taskLimit) break;
-      if (taskPage >= 5) {
-        console.warn(`[ActivityCache:${team}] Reached 5 pages of tasks (${tasks.length} tasks), stopping.`);
+      if (taskPage >= 10) {
+        console.warn(`[ActivityCache:${team}] Reached 10 pages of tasks (${tasks.length} tasks), stopping.`);
         break;
       }
       taskPage++;
@@ -118,10 +120,10 @@ async function fetchActivity(
         leadId: t.entity_id || 0,
         leadNome: leadNameMap.get(t.entity_id) || `Lead ${t.entity_id || 0}`,
         diasVencida: Math.max(0, Math.floor((now - t.complete_till) / 86400)),
+        completeTill: t.complete_till,
         kommoUrl: `https://${subdomain}.kommo.com/leads/detail/${t.entity_id || 0}`,
       }))
-      .sort((a, b) => b.diasVencida - a.diasVencida)
-      .slice(0, 30);
+      .sort((a, b) => b.diasVencida - a.diasVencida);
   } catch (err: any) {
     console.error(`[ActivityCache:${team}] Erro ao buscar tarefas:`, err.message);
   }
