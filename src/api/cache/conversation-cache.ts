@@ -1,12 +1,13 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { KommoService } from "../../services/kommo.js";
-import { TeamKey } from "../../config.js";
-import { getCrmMetrics, ActiveLead } from "./crm-cache.js";
+import { TeamKey, TEAMS } from "../../config.js";
+import { getCrmMetrics, ActiveLead, CrmMetrics } from "./crm-cache.js";
 
 export interface ConversationInsight {
   leadId: number;
   leadNome: string;
   vendedor: string;
+  kommoUrl: string;
   sentimentScore: number;
   qualityScore: number;
   resumo: string;
@@ -24,21 +25,17 @@ export interface AgentInsightSummary {
   insights: ConversationInsight[];
 }
 
-interface InsightsCacheEntry {
-  data: AgentInsightSummary[] | null;
-  expiresAt: number;
-  fetchPromise: Promise<AgentInsightSummary[]> | null;
+// Per-lead insight cache — survives across requests, saves Gemini tokens
+interface LeadInsightEntry {
+  insight: ConversationInsight;
+  noteCount: number;
+  analyzedAt: number;
 }
+const leadInsightCache = new Map<number, LeadInsightEntry>();
 
-const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
-const MAX_CONVERSATIONS_PER_AGENT = 5;
-const MAX_LEADS_SAMPLE = 30; // reduced from 50 to limit API calls
-const CONCURRENCY = 5; // parallel notes/analysis workers
-
-const caches: Record<TeamKey, InsightsCacheEntry> = {
-  azul: { data: null, expiresAt: 0, fetchPromise: null },
-  amarela: { data: null, expiresAt: 0, fetchPromise: null },
-};
+const MAX_LEADS_SAMPLE = 30;
+const CONCURRENCY = 5;
+const MIN_NEW_ACTIONS = 5; // Only re-analyze if +5 new notes since last analysis
 
 const ANALYSIS_PROMPT = `Voce e um analista de qualidade de atendimento comercial. Analise a conversa abaixo entre o vendedor e o lead/cliente.
 
@@ -64,9 +61,9 @@ Conversa:
 async function analyzeConversation(
   genAI: GoogleGenerativeAI,
   leadNome: string,
-  vendedor: string,
+  _vendedor: string,
   notes: Array<{ text: string; created_at: number; note_type: string }>
-): Promise<Omit<ConversationInsight, "leadId" | "leadNome" | "vendedor" | "analisadoEm"> | null> {
+): Promise<Omit<ConversationInsight, "leadId" | "leadNome" | "vendedor" | "kommoUrl" | "analisadoEm"> | null> {
   if (notes.length === 0) return null;
 
   const conversationText = notes
@@ -104,7 +101,6 @@ async function analyzeConversation(
 /**
  * Score leads for analysis priority.
  * Considers: deal value (price), recency (updated_at), and ensures diversity across agents.
- * Returns the top N leads sorted by score.
  */
 function scoreAndSelectLeads(allLeads: ActiveLead[], maxLeads: number): ActiveLead[] {
   if (allLeads.length === 0) return [];
@@ -113,17 +109,15 @@ function scoreAndSelectLeads(allLeads: ActiveLead[], maxLeads: number): ActiveLe
   const maxPrice = Math.max(...allLeads.map((l) => l.price), 1);
   const maxAge = Math.max(...allLeads.map((l) => now - l.updatedAt), 1);
 
-  // Score each lead: 40% price potential + 60% recency
   const scored = allLeads.map((lead) => {
-    const priceScore = lead.price / maxPrice; // 0-1, higher price = higher
-    const recencyScore = 1 - (now - lead.updatedAt) / maxAge; // 0-1, more recent = higher
+    const priceScore = lead.price / maxPrice;
+    const recencyScore = 1 - (now - lead.updatedAt) / maxAge;
     const score = priceScore * 0.4 + recencyScore * 0.6;
     return { lead, score };
   });
 
   scored.sort((a, b) => b.score - a.score);
 
-  // Select top leads ensuring diversity across agents (max 8 per agent in the pool)
   const MAX_PER_AGENT = 8;
   const agentCounts = new Map<string, number>();
   const selected: ActiveLead[] = [];
@@ -158,54 +152,94 @@ async function parallelMap<T, R>(
   return results;
 }
 
-async function fetchInsights(
-  team: TeamKey,
-  service: KommoService,
-  genAI: GoogleGenerativeAI
-): Promise<AgentInsightSummary[]> {
-  console.log(`[ConversationCache:${team}] Fetching conversation insights...`);
+export interface InsightsFilter {
+  team?: string;
+  funil?: string;
+  agente?: string;
+}
 
-  const metrics = await getCrmMetrics(team, service);
+/**
+ * Fetch insights for specific filters. Uses per-lead cache to minimize Gemini calls.
+ * Only re-analyzes a lead if it has +5 new notes since last analysis.
+ */
+export async function fetchFilteredInsights(
+  services: Record<TeamKey, KommoService>,
+  genAI: GoogleGenerativeAI,
+  userTeams: TeamKey[],
+  filters: InsightsFilter
+): Promise<{ data: AgentInsightSummary[]; processing: boolean }> {
+  const targetTeams = filters.team
+    ? userTeams.filter((t) => t === filters.team && !!services[t])
+    : userTeams.filter((t) => !!services[t]);
 
-  // Score ALL active leads by price + recency, pick top leads
-  const topLeads = scoreAndSelectLeads(metrics.activeLeads, MAX_LEADS_SAMPLE);
-  console.log(`[ConversationCache:${team}] Selected ${topLeads.length} leads from ${metrics.activeLeads.length} active (scored by price + recency)`);
+  if (targetTeams.length === 0) return { data: [], processing: false };
 
-  // Group by agent
-  const leadsByAgent = new Map<string, ActiveLead[]>();
-  for (const lead of topLeads) {
-    const agentName = lead.responsibleUserName;
-    if (!leadsByAgent.has(agentName)) {
-      leadsByAgent.set(agentName, []);
+  // Collect all active leads matching filters
+  let allLeads: Array<{ lead: ActiveLead; team: TeamKey; metrics: CrmMetrics }> = [];
+
+  for (const team of targetTeams) {
+    const metrics = await getCrmMetrics(team, services[team]);
+    let leads = metrics.activeLeads;
+
+    // Filter by funil (pipeline name)
+    if (filters.funil) {
+      const pipelineIds = new Set<number>();
+      for (const [id, name] of Object.entries(metrics.pipelineNames)) {
+        const cleanName = name.replace(/^FUNIL\s+/i, "");
+        if (cleanName === filters.funil) pipelineIds.add(Number(id));
+      }
+      leads = leads.filter((l) => pipelineIds.has(l.pipelineId));
     }
-    leadsByAgent.get(agentName)!.push(lead);
+
+    // Filter by agente
+    if (filters.agente) {
+      leads = leads.filter((l) => l.responsibleUserName === filters.agente);
+    }
+
+    for (const lead of leads) {
+      allLeads.push({ lead, team, metrics });
+    }
   }
 
-  // Flatten all leads to analyze with their agent info
-  const leadsToAnalyze: Array<{ lead: ActiveLead; agentName: string }> = [];
-  for (const [agentName, leads] of leadsByAgent) {
-    const sampled = leads.slice(0, MAX_CONVERSATIONS_PER_AGENT);
-    for (const lead of sampled) {
-      leadsToAnalyze.push({ lead, agentName });
-    }
-  }
+  // Score and select top 30
+  const selectedLeads = scoreAndSelectLeads(
+    allLeads.map((l) => l.lead),
+    MAX_LEADS_SAMPLE
+  );
+  const selectedIds = new Set(selectedLeads.map((l) => l.id));
+  const selectedWithTeam = allLeads.filter((l) => selectedIds.has(l.lead.id));
 
-  // Fetch notes + analyze in parallel with concurrency limit
+  console.log(`[Insights] Analyzing ${selectedWithTeam.length} leads (filtered from ${allLeads.length})`);
+
+  // Analyze leads (using per-lead cache + 5-action rule)
   const insightResults = await parallelMap(
-    leadsToAnalyze,
+    selectedWithTeam,
     CONCURRENCY,
-    async ({ lead, agentName }): Promise<ConversationInsight | null> => {
+    async ({ lead, team }): Promise<ConversationInsight | null> => {
+      const subdomain = TEAMS[team].subdomain;
+      const kommoUrl = `https://${subdomain}.kommo.com/leads/detail/${lead.id}`;
+
       try {
-        const notes = await service.getLeadNotesAll(lead.id);
+        const notes = await services[team].getLeadNotesAll(lead.id);
         const messageNotes = notes.filter(
           (n) => (n.params?.text || n.text || "").trim().length > 0
         );
         if (messageNotes.length < 2) return null;
 
+        const currentNoteCount = messageNotes.length;
+
+        // Check per-lead cache: skip if <5 new notes since last analysis
+        const cached = leadInsightCache.get(lead.id);
+        if (cached && (currentNoteCount - cached.noteCount) < MIN_NEW_ACTIONS) {
+          // Update kommoUrl in case team changed
+          return { ...cached.insight, kommoUrl };
+        }
+
+        // Analyze with Gemini
         const analysis = await analyzeConversation(
           genAI,
           lead.titulo,
-          agentName,
+          lead.responsibleUserName,
           messageNotes.map((n) => ({
             text: n.params?.text || n.text || "",
             created_at: n.created_at,
@@ -214,21 +248,32 @@ async function fetchInsights(
         );
 
         if (!analysis) return null;
-        return {
+
+        const insight: ConversationInsight = {
           leadId: lead.id,
           leadNome: lead.titulo,
-          vendedor: agentName,
+          vendedor: lead.responsibleUserName,
+          kommoUrl,
           ...analysis,
           analisadoEm: new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }),
         };
+
+        // Update per-lead cache
+        leadInsightCache.set(lead.id, {
+          insight,
+          noteCount: currentNoteCount,
+          analyzedAt: Date.now(),
+        });
+
+        return insight;
       } catch (err) {
-        console.error(`[ConversationCache:${team}] Error processing lead ${lead.id}:`, err);
+        console.error(`[Insights] Error processing lead ${lead.id}:`, err);
         return null;
       }
     }
   );
 
-  // Group results back by agent
+  // Group by agent
   const insightsByAgent = new Map<string, ConversationInsight[]>();
   for (const insight of insightResults) {
     if (!insight) continue;
@@ -239,6 +284,7 @@ async function fetchInsights(
 
   const agentSummaries: AgentInsightSummary[] = [];
   for (const [agentName, insights] of insightsByAgent) {
+    const team = selectedWithTeam.find((l) => l.lead.responsibleUserName === agentName)?.team || targetTeams[0];
     const avgSentiment = insights.reduce((s, i) => s + i.sentimentScore, 0) / insights.length;
     const avgQuality = insights.reduce((s, i) => s + i.qualityScore, 0) / insights.length;
 
@@ -253,72 +299,25 @@ async function fetchInsights(
   }
 
   agentSummaries.sort((a, b) => b.mediaQualidade - a.mediaQualidade);
-  console.log(`[ConversationCache:${team}] Done — ${agentSummaries.length} agents analyzed`);
-  return agentSummaries;
+  console.log(`[Insights] Done — ${agentSummaries.length} agents`);
+  return { data: agentSummaries, processing: false };
 }
 
-/**
- * Returns cached insights immediately if available.
- * On cold cache (first call), starts background processing and returns empty array
- * so the frontend doesn't hang waiting for Gemini to analyze all conversations.
- */
+// Legacy functions for backwards compat (remove later)
 export async function getConversationInsights(
   team: TeamKey,
   service: KommoService,
   genAI: GoogleGenerativeAI
 ): Promise<{ data: AgentInsightSummary[]; processing: boolean }> {
-  const entry = caches[team];
-  const now = Date.now();
-
-  // Cache hit — return immediately
-  if (entry.data && now < entry.expiresAt) {
-    return { data: entry.data, processing: false };
-  }
-
-  // Stale cache — return stale data and refresh in background
-  if (entry.data && !entry.fetchPromise) {
-    entry.fetchPromise = fetchInsights(team, service, genAI)
-      .then((data) => {
-        entry.data = data;
-        entry.expiresAt = Date.now() + CACHE_TTL_MS;
-        return data;
-      })
-      .catch((err) => {
-        console.error(`[ConversationCache:${team}] Refresh error:`, err);
-        return entry.data!;
-      })
-      .finally(() => { entry.fetchPromise = null; });
-    return { data: entry.data, processing: true };
-  }
-
-  // Cold cache — start background fetch, return empty immediately
-  if (!entry.fetchPromise) {
-    entry.fetchPromise = fetchInsights(team, service, genAI)
-      .then((data) => {
-        entry.data = data;
-        entry.expiresAt = Date.now() + CACHE_TTL_MS;
-        return data;
-      })
-      .catch((err) => {
-        console.error(`[ConversationCache:${team}] Initial fetch error:`, err);
-        return [];
-      })
-      .finally(() => { entry.fetchPromise = null; });
-  }
-
-  return { data: [], processing: true };
+  return fetchFilteredInsights(
+    { [team]: service } as Record<TeamKey, KommoService>,
+    genAI,
+    [team],
+    { team }
+  );
 }
 
-/**
- * Clears cached insights for a specific team or all teams.
- * After clearing, next call to getConversationInsights will trigger a fresh fetch.
- */
-export function clearInsightsCache(team?: TeamKey): void {
-  const teams = team ? [team] : (Object.keys(caches) as TeamKey[]);
-  for (const t of teams) {
-    caches[t].data = null;
-    caches[t].expiresAt = 0;
-    caches[t].fetchPromise = null;
-  }
-  console.log(`[InsightsCache] Cache cleared for: ${teams.join(", ")}`);
+export function clearInsightsCache(_team?: TeamKey): void {
+  // Per-lead cache doesn't need clearing — 5-action rule handles staleness
+  console.log(`[InsightsCache] Cache invalidation requested (per-lead cache remains)`);
 }

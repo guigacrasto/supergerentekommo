@@ -34,6 +34,7 @@ export interface ActiveLead {
   titulo: string;
   responsibleUserId: number;
   responsibleUserName: string;
+  pipelineId: number;
   updatedAt: number; // Unix timestamp (seconds)
   price: number; // Deal value (potential)
 }
@@ -242,6 +243,7 @@ async function fetchAndCompute(team: TeamKey, service: KommoService): Promise<Cr
       titulo: l.name || `Lead ${l.id}`,
       responsibleUserId: l.responsible_user_id,
       responsibleUserName: userMap.get(l.responsible_user_id) || "Desconhecido",
+      pipelineId: l.pipeline_id ?? 0,
       updatedAt: l.updated_at ?? 0,
       price: l.price ?? 0,
     }));

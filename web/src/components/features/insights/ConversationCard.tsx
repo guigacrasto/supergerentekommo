@@ -5,13 +5,13 @@ interface ConversationCardProps {
   leadId: number;
   leadNome: string;
   vendedor: string;
+  kommoUrl?: string;
   sentimentScore: number;
   qualityScore: number;
   resumo: string;
   pontosPositivos: string[];
   pontosMelhoria: string[];
   analisadoEm: string;
-  kommoSubdomain?: string;
 }
 
 function scoreToBadge(score: number): { variant: 'success' | 'warning' | 'danger'; label: string } {
@@ -21,15 +21,14 @@ function scoreToBadge(score: number): { variant: 'success' | 'warning' | 'danger
 }
 
 export function ConversationCard({
-  leadId,
   leadNome,
+  kommoUrl,
   sentimentScore,
   qualityScore,
   resumo,
   pontosPositivos,
   pontosMelhoria,
   analisadoEm,
-  kommoSubdomain,
 }: ConversationCardProps) {
   const sentiment = scoreToBadge(sentimentScore);
   const quality = scoreToBadge(qualityScore);
@@ -39,21 +38,23 @@ export function ConversationCard({
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-2">
           <MessageSquare className="h-4 w-4 text-primary" />
-          <span className="font-heading text-heading-sm">{leadNome}</span>
+          {kommoUrl ? (
+            <a
+              href={kommoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-heading text-heading-sm text-primary hover:underline"
+            >
+              {leadNome}
+              <ExternalLink className="ml-1 inline h-3.5 w-3.5" />
+            </a>
+          ) : (
+            <span className="font-heading text-heading-sm">{leadNome}</span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <Badge variant={quality.variant}>Qualidade: {quality.label}</Badge>
           <Badge variant={sentiment.variant}>Sentimento: {sentiment.label}</Badge>
-          {kommoSubdomain && (
-            <a
-              href={`https://${kommoSubdomain}.kommo.com/leads/detail/${leadId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-muted hover:text-primary transition-colors"
-            >
-              <ExternalLink className="h-4 w-4" />
-            </a>
-          )}
         </div>
       </div>
 
