@@ -6,6 +6,8 @@ export interface AlertLead {
   id: number;
   nome: string;
   vendedor: string;
+  funil: string;
+  grupo: string;
   diasSemAtividade: number;
   updatedAt: number;
   kommoUrl: string;
@@ -15,6 +17,8 @@ export interface AlertTask {
   id: number;
   texto: string;
   vendedor: string;
+  funil: string;
+  grupo: string;
   leadId: number;
   leadNome: string;
   diasVencida: number;
@@ -57,30 +61,33 @@ async function fetchActivity(
 
   const activeLeads = crmMetrics.activeLeads;
 
-  // Leads without activity in last 48h but less than 7 days (warning tier)
-  const leadsAbandonados48h: AlertLead[] = activeLeads
-    .filter((l) => l.updatedAt < cutoff48h && l.updatedAt >= cutoff7d)
-    .map((l) => ({
+  // Lookup helpers for funil & grupo
+  const pipelineNames = crmMetrics.pipelineNames;
+  const userGroups = crmMetrics.userGroups;
+
+  function mapLead(l: typeof activeLeads[0]): AlertLead {
+    return {
       id: l.id,
       nome: l.titulo,
       vendedor: l.responsibleUserName,
+      funil: pipelineNames[l.pipelineId] || "",
+      grupo: userGroups[l.responsibleUserId] || "",
       diasSemAtividade: Math.floor((now - l.updatedAt) / 86400),
       updatedAt: l.updatedAt,
       kommoUrl: `https://${subdomain}.kommo.com/leads/detail/${l.id}`,
-    }))
+    };
+  }
+
+  // Leads without activity in last 48h but less than 7 days (warning tier)
+  const leadsAbandonados48h: AlertLead[] = activeLeads
+    .filter((l) => l.updatedAt < cutoff48h && l.updatedAt >= cutoff7d)
+    .map(mapLead)
     .sort((a, b) => b.diasSemAtividade - a.diasSemAtividade);
 
   // Leads without activity for 7+ days (critical tier)
   const leadsEmRisco7d: AlertLead[] = activeLeads
     .filter((l) => l.updatedAt < cutoff7d)
-    .map((l) => ({
-      id: l.id,
-      nome: l.titulo,
-      vendedor: l.responsibleUserName,
-      diasSemAtividade: Math.floor((now - l.updatedAt) / 86400),
-      updatedAt: l.updatedAt,
-      kommoUrl: `https://${subdomain}.kommo.com/leads/detail/${l.id}`,
-    }))
+    .map(mapLead)
     .sort((a, b) => b.diasSemAtividade - a.diasSemAtividade);
 
   // Overdue tasks — paginated fetch
@@ -108,6 +115,9 @@ async function fetchActivity(
     const leadNameMap = new Map<number, string>(
       activeLeads.map((l) => [l.id, l.titulo])
     );
+    const leadPipelineMap = new Map<number, number>(
+      activeLeads.map((l) => [l.id, l.pipelineId])
+    );
     const userNameMap = new Map<number, string>(
       activeLeads.map((l) => [l.responsibleUserId, l.responsibleUserName])
     );
@@ -118,6 +128,8 @@ async function fetchActivity(
         id: t.id,
         texto: t.text || "Tarefa",
         vendedor: userNameMap.get(t.responsible_user_id) || `User ${t.responsible_user_id}`,
+        funil: pipelineNames[leadPipelineMap.get(t.entity_id) ?? 0] || "",
+        grupo: userGroups[t.responsible_user_id] || "",
         leadId: t.entity_id || 0,
         leadNome: leadNameMap.get(t.entity_id) || `Lead ${t.entity_id || 0}`,
         diasVencida: Math.max(0, Math.floor((now - t.complete_till) / 86400)),
@@ -171,14 +183,7 @@ async function fetchActivity(
       const ddd = extractDDD(phone);
       return ddd !== null && FORBIDDEN_DDDS.has(ddd);
     })
-    .map((l) => ({
-      id: l.id,
-      nome: l.titulo,
-      vendedor: l.responsibleUserName,
-      diasSemAtividade: Math.floor((now - l.updatedAt) / 86400),
-      updatedAt: l.updatedAt,
-      kommoUrl: `https://${subdomain}.kommo.com/leads/detail/${l.id}`,
-    }));
+    .map(mapLead);
 
   console.log(
     `[ActivityCache:${team}] ${leadsAbandonados48h.length} abandonados, ${leadsEmRisco7d.length} em risco, ${tarefasVencidas.length} tarefas vencidas, ${leadsDDDProibido.length} DDD proibido`

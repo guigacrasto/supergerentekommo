@@ -176,8 +176,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           )}
         </ul>
 
-        {/* Team accordion sections — hidden when collapsed */}
-        {!isCollapsed && (
+        {/* Team accordion sections — hidden when collapsed, admin only */}
+        {!isCollapsed && user?.role === 'admin' && (
           <div className="mt-6 space-y-2">
             {(['azul', 'amarela'] as const).map((team) => {
               const teamPipelines = byTeam(team);

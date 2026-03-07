@@ -1,8 +1,12 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
+import { useFilterStore } from '@/stores/filterStore';
 import { LiveTimestamp } from '@/components/ui';
 import { TimeFilter } from '@/components/features/filters/TimeFilter';
+import { GroupFilter } from '@/components/features/filters/GroupFilter';
+import { FunilFilter } from '@/components/features/filters/FunilFilter';
+import { AgenteFilter } from '@/components/features/filters/AgenteFilter';
 import { TagFilter } from '@/components/features/filters/TagFilter';
 import { AlertList } from '@/components/features/alerts/AlertList';
 import type { AlertTab } from '@/components/features/alerts/AlertList';
@@ -13,6 +17,8 @@ interface RawAlertLead {
   id: number;
   nome: string;
   vendedor: string;
+  funil?: string;
+  grupo?: string;
   diasSemAtividade: number;
   updatedAt?: number;
   kommoUrl: string;
@@ -22,6 +28,8 @@ interface RawAlertTask {
   id: number;
   texto: string;
   vendedor: string;
+  funil?: string;
+  grupo?: string;
   leadId: number;
   leadNome: string;
   diasVencida: number;
@@ -83,6 +91,8 @@ export function AlertsPage() {
   const [loading, setLoading] = useState(true);
   const [lastFetchTime, setLastFetchTime] = useState('');
   const [teamFilter, setTeamFilter] = useState('');
+  const [groupFilter, setGroupFilter] = useState('');
+  const [selectedAgente, setSelectedAgente] = useState('');
   const [alertFilter, setAlertFilter] = useState<AlertFilter>('todos');
   const [tab, setTab] = useState<AlertTab>('ativos');
   const [archivedKeys, setArchivedKeys] = useState<Set<string>>(() => loadSet(STORAGE_KEY_ARCHIVED));
@@ -92,6 +102,7 @@ export function AlertsPage() {
 
   const user = useAuthStore((s) => s.user);
   const userTeams = user?.teams ?? [];
+  const selectedFunil = useFilterStore((s) => s.selectedFunil);
 
   const fetchData = useCallback(async () => {
     try {
@@ -170,38 +181,80 @@ export function AlertsPage() {
     (t) => !teamFilter || t.team === teamFilter
   );
 
-  // Extrair vendedores unicos pra referencia (nao filtramos por vendedor aqui,
-  // mas os dados ficam disponiveis se precisar no futuro)
+  // Helper: apply grupo/funil/agente filters to lead alerts
+  function filterLead(a: RawAlertLead): boolean {
+    if (groupFilter && (a.grupo || '') !== groupFilter) return false;
+    if (selectedFunil && (a.funil || '') !== selectedFunil) return false;
+    if (selectedAgente && a.vendedor !== selectedAgente) return false;
+    return true;
+  }
 
-  // Aggregate alerts across teams
+  // Helper: apply grupo/funil/agente filters to task alerts
+  function filterTask(t: RawAlertTask): boolean {
+    if (groupFilter && (t.grupo || '') !== groupFilter) return false;
+    if (selectedFunil && (t.funil || '') !== selectedFunil) return false;
+    if (selectedAgente && t.vendedor !== selectedAgente) return false;
+    return true;
+  }
+
+  // Extract unique values for filter dropdowns
+  const { allGrupos, allFunis, allAgentes } = useMemo(() => {
+    const gruposSet = new Set<string>();
+    const funisSet = new Set<string>();
+    const agentesSet = new Set<string>();
+    for (const td of filteredTeams) {
+      const allLeads = [
+        ...td.activity.leadsAbandonados48h,
+        ...td.activity.leadsEmRisco7d,
+        ...(td.activity.leadsDDDProibido || []),
+      ];
+      for (const a of allLeads) {
+        if (a.grupo) gruposSet.add(a.grupo);
+        if (a.funil) funisSet.add(a.funil);
+        if (a.vendedor) agentesSet.add(a.vendedor);
+      }
+      for (const t of td.activity.tarefasVencidas) {
+        if (t.grupo) gruposSet.add(t.grupo);
+        if (t.funil) funisSet.add(t.funil);
+        if (t.vendedor) agentesSet.add(t.vendedor);
+      }
+    }
+    return {
+      allGrupos: [...gruposSet].sort(),
+      allFunis: [...funisSet].sort(),
+      allAgentes: [...agentesSet].sort(),
+    };
+  }, [filteredTeams]);
+
+  // Aggregate alerts across teams with filters applied
   const alerts48h =
     alertFilter === 'todos' || alertFilter === 'risco48h'
-      ? filteredTeams.flatMap((t) => t.activity.leadsAbandonados48h)
+      ? filteredTeams.flatMap((t) => t.activity.leadsAbandonados48h).filter(filterLead)
       : [];
 
   const alerts7d =
     alertFilter === 'todos' || alertFilter === 'risco7d'
-      ? filteredTeams.flatMap((t) => t.activity.leadsEmRisco7d)
+      ? filteredTeams.flatMap((t) => t.activity.leadsEmRisco7d).filter(filterLead)
       : [];
 
   const tarefas =
     alertFilter === 'todos' || alertFilter === 'tarefas'
-      ? filteredTeams.flatMap((t) => t.activity.tarefasVencidas)
+      ? filteredTeams.flatMap((t) => t.activity.tarefasVencidas).filter(filterTask)
       : [];
 
   const alertsDDD =
     alertFilter === 'todos' || alertFilter === 'ddd'
-      ? filteredTeams.flatMap((t) => t.activity.leadsDDDProibido || [])
+      ? filteredTeams.flatMap((t) => t.activity.leadsDDDProibido || []).filter(filterLead)
       : [];
 
   // Contadores por tab
   const countForTab = useMemo(() => {
     const allKeys: string[] = [];
     for (const td of filteredTeams) {
-      for (const a of td.activity.leadsAbandonados48h) allKeys.push(`48h-${a.id}`);
-      for (const a of td.activity.leadsEmRisco7d) allKeys.push(`7d-${a.id}`);
-      for (const t of td.activity.tarefasVencidas) allKeys.push(`task-${t.id}`);
-      for (const a of (td.activity.leadsDDDProibido || [])) allKeys.push(`ddd-${a.id}`);
+      for (const a of td.activity.leadsAbandonados48h.filter(filterLead)) allKeys.push(`48h-${a.id}`);
+      for (const a of td.activity.leadsEmRisco7d.filter(filterLead)) allKeys.push(`7d-${a.id}`);
+      for (const t of td.activity.tarefasVencidas.filter(filterTask)) allKeys.push(`task-${t.id}`);
+      for (const a of (td.activity.leadsDDDProibido || []).filter(filterLead)) allKeys.push(`ddd-${a.id}`);
     }
 
     let concluidos = 0;
@@ -211,7 +264,7 @@ export function AlertsPage() {
       if (archivedKeys.has(k)) arquivados++;
     }
     return { concluidos, arquivados };
-  }, [filteredTeams, completedKeys, archivedKeys]);
+  }, [filteredTeams, completedKeys, archivedKeys, groupFilter, selectedFunil, selectedAgente]);
 
   const modalHistory = historyModal !== null ? (alertHistory[String(historyModal)] || []) : [];
 
@@ -219,9 +272,12 @@ export function AlertsPage() {
     <div className="flex flex-col gap-6">
       <LiveTimestamp timestamp={lastFetchTime} />
 
-      {/* Filters */}
+      {/* Filters — Time > Equipe > Funil > Agente > Tags */}
       <div className="flex flex-wrap items-center gap-4">
-        <TimeFilter teams={userTeams} selected={teamFilter} onChange={setTeamFilter} />
+        <TimeFilter teams={userTeams} selected={teamFilter} onChange={(t) => { setTeamFilter(t); setGroupFilter(''); setSelectedAgente(''); }} />
+        <GroupFilter grupos={allGrupos} selected={groupFilter} onChange={(g) => { setGroupFilter(g); setSelectedAgente(''); }} />
+        <FunilFilter funis={allFunis} />
+        <AgenteFilter agentes={allAgentes} selected={selectedAgente} onChange={setSelectedAgente} />
         <TagFilter />
 
         <div className="flex items-center gap-1.5">
