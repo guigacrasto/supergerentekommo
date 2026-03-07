@@ -665,7 +665,6 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
       let pipelineNamesMap: Record<number, string> = {};
       const allFunilNames = new Set<string>();
 
-      let debugLogDone = false;
       for (const { team, metrics } of allMetrics) {
         if (teamFilter && team !== teamFilter) continue;
         Object.assign(pipelineNamesMap, metrics.pipelineNames);
@@ -673,13 +672,6 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
           allFunilNames.add(v.funil.replace(/^FUNIL\s+/i, ""));
         }
         for (const lead of metrics.leadSnapshots) {
-          // Debug: log custom fields dos primeiros 3 leads que tem custom_fields_values
-          if (!debugLogDone && lead.custom_fields_values && lead.custom_fields_values.length > 0) {
-            const fieldNames = lead.custom_fields_values.map((cf: any) => `"${cf.field_name}" (id:${cf.field_id}, val:${cf.values?.[0]?.value})`);
-            console.log(`[Income DEBUG] Lead ${lead.id} custom fields:`, fieldNames.join(", "));
-            debugLogDone = true;
-          }
-
           if (lead.created_at >= fromTs && lead.created_at <= toTs) {
             if (groupUserIds && !groupUserIds.has(lead.responsible_user_id)) continue;
             if (funilFilter) {
@@ -694,23 +686,6 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
           }
         }
       }
-
-      // Debug: coleta todos os nomes de custom fields unicos encontrados
-      const allFieldNames = new Set<string>();
-      let leadsWithCF = 0;
-      for (const { metrics } of allMetrics) {
-        for (const lead of metrics.leadSnapshots) {
-          if (lead.custom_fields_values && lead.custom_fields_values.length > 0) {
-            leadsWithCF++;
-            for (const cf of lead.custom_fields_values) {
-              allFieldNames.add(cf.field_name || `ID:${cf.field_id}`);
-            }
-          }
-        }
-      }
-      const withRenda = leads.filter((l) => l.renda !== null).length;
-      console.log(`[Income DEBUG] Total leads: ${leads.length}, com renda preenchida: ${withRenda}, leads com algum custom field: ${leadsWithCF}`);
-      console.log(`[Income DEBUG] Todos os nomes de campos customizados encontrados: ${[...allFieldNames].join(", ")}`);
 
       // Initialize brackets + "Não informado"
       const faixasMap: Record<string, { volume: number; fechamentos: number; totalPrice: number }> = {};

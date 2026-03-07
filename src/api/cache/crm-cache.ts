@@ -261,18 +261,6 @@ async function fetchAndCompute(team: TeamKey, service: KommoService): Promise<Cr
     custom_fields_values: l.custom_fields_values ?? null,
   }));
 
-  // DEBUG: log unique custom field names from first team build
-  const cfNames = new Set<string>();
-  let cfLeadCount = 0;
-  for (const l of allLeads) {
-    if (l.custom_fields_values && l.custom_fields_values.length > 0) {
-      cfLeadCount++;
-      for (const cf of l.custom_fields_values) {
-        cfNames.add(cf.field_name || `ID:${cf.field_id}`);
-      }
-    }
-  }
-  console.log(`[CRM Cache] Custom fields — ${cfLeadCount}/${allLeads.length} leads com campos. Nomes: ${[...cfNames].join(", ")}`);
 
   const pipelineNames: Record<number, string> = {};
   pipelines.forEach((p: any) => { pipelineNames[p.id] = p.name; });
