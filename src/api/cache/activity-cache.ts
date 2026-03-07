@@ -26,6 +26,7 @@ export interface ActivityMetrics {
   leadsAbandonados48h: AlertLead[];
   leadsEmRisco7d: AlertLead[];
   tarefasVencidas: AlertTask[];
+  leadsDDDProibido: AlertLead[];
   atualizadoEm: string;
 }
 
@@ -128,14 +129,66 @@ async function fetchActivity(
     console.error(`[ActivityCache:${team}] Erro ao buscar tarefas:`, err.message);
   }
 
+  // DDD Proibido — leads ativos com telefone DDD 81, 87 ou 83
+  const FORBIDDEN_DDDS = new Set(["81", "87", "83"]);
+
+  const snapshotCfMap = new Map<number, any[] | null>(
+    crmMetrics.leadSnapshots.map((s) => [s.id, s.custom_fields_values])
+  );
+
+  function getPhoneFromLead(leadId: number): string | null {
+    const cfValues = snapshotCfMap.get(leadId);
+    if (cfValues) {
+      for (const cf of cfValues) {
+        if (cf.field_code === "PHONE" || /phone|telefone|celular/i.test(cf.field_name || "")) {
+          const val = cf.values?.[0]?.value;
+          if (val) return val.toString();
+        }
+      }
+    }
+    const contactCfs = crmMetrics.contactCfByLead[leadId];
+    if (!contactCfs) return null;
+    for (const cf of contactCfs) {
+      if (cf.field_code === "PHONE" || /phone|telefone|celular/i.test(cf.field_name || "")) {
+        const val = cf.values?.[0]?.value;
+        if (val) return val.toString();
+      }
+    }
+    return null;
+  }
+
+  function extractDDD(phone: string): string | null {
+    const digits = phone.replace(/\D/g, "");
+    if (digits.startsWith("55") && digits.length >= 12) return digits.substring(2, 4);
+    if (digits.length >= 10 && digits.length <= 11) return digits.substring(0, 2);
+    return null;
+  }
+
+  const leadsDDDProibido: AlertLead[] = activeLeads
+    .filter((l) => {
+      const phone = getPhoneFromLead(l.id);
+      if (!phone) return false;
+      const ddd = extractDDD(phone);
+      return ddd !== null && FORBIDDEN_DDDS.has(ddd);
+    })
+    .map((l) => ({
+      id: l.id,
+      nome: l.titulo,
+      vendedor: l.responsibleUserName,
+      diasSemAtividade: Math.floor((now - l.updatedAt) / 86400),
+      updatedAt: l.updatedAt,
+      kommoUrl: `https://${subdomain}.kommo.com/leads/detail/${l.id}`,
+    }));
+
   console.log(
-    `[ActivityCache:${team}] ${leadsAbandonados48h.length} abandonados, ${leadsEmRisco7d.length} em risco, ${tarefasVencidas.length} tarefas vencidas`
+    `[ActivityCache:${team}] ${leadsAbandonados48h.length} abandonados, ${leadsEmRisco7d.length} em risco, ${tarefasVencidas.length} tarefas vencidas, ${leadsDDDProibido.length} DDD proibido`
   );
 
   return {
     leadsAbandonados48h,
     leadsEmRisco7d,
     tarefasVencidas,
+    leadsDDDProibido,
     atualizadoEm: new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }),
   };
 }

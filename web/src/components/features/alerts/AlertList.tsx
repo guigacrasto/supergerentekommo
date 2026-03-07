@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertTriangle, Clock, ListChecks, CheckCircle2, ChevronDown } from 'lucide-react';
+import { AlertTriangle, Clock, ListChecks, CheckCircle2, ChevronDown, Phone } from 'lucide-react';
 import { Badge } from '@/components/ui';
 import { AlertCard } from './AlertCard';
 import type { LucideIcon } from 'lucide-react';
@@ -31,6 +31,7 @@ interface AlertListProps {
   alerts48h: RawAlertLead[];
   alerts7d: RawAlertLead[];
   tarefas: RawAlertTask[];
+  alertsDDD: RawAlertLead[];
   archivedKeys: Set<string>;
   completedKeys: Set<string>;
   alertHistory: Record<string, Array<{ type: string; date: string }>>;
@@ -43,7 +44,7 @@ interface AlertListProps {
 interface SectionConfig {
   title: string;
   icon: LucideIcon;
-  severity: 'danger' | 'warning' | 'info';
+  severity: 'danger' | 'warning' | 'info' | 'muted';
   borderColor: string;
 }
 
@@ -65,6 +66,12 @@ const sections: SectionConfig[] = [
     icon: ListChecks,
     severity: 'info',
     borderColor: 'border-l-accent-blue',
+  },
+  {
+    title: 'DDD Proibido (81, 87, 83)',
+    icon: Phone,
+    severity: 'muted',
+    borderColor: 'border-l-muted',
   },
 ];
 
@@ -159,6 +166,7 @@ export function AlertList({
   alerts48h,
   alerts7d,
   tarefas,
+  alertsDDD,
   archivedKeys,
   completedKeys,
   alertHistory,
@@ -204,6 +212,18 @@ export function AlertList({
         timestamp: t.completeTill || (now - t.diasVencida * 86400),
         kommoUrl: t.kommoUrl,
         type: 'tarefa',
+      })),
+    },
+    {
+      config: sections[3],
+      items: alertsDDD.map((a) => ({
+        key: `ddd-${a.id}`,
+        leadId: a.id,
+        leadName: a.nome,
+        vendedor: a.vendedor,
+        timestamp: a.updatedAt || (now - a.diasSemAtividade * 86400),
+        kommoUrl: a.kommoUrl,
+        type: 'ddd-proibido',
       })),
     },
   ];

@@ -4,11 +4,12 @@ import type { LucideIcon } from 'lucide-react';
 
 const severityConfig: Record<
   string,
-  { icon: LucideIcon; badgeVariant: 'danger' | 'warning' | 'info' }
+  { icon: LucideIcon; badgeVariant: 'danger' | 'warning' | 'info' | 'muted' }
 > = {
   danger: { icon: AlertTriangle, badgeVariant: 'danger' },
   warning: { icon: Clock, badgeVariant: 'warning' },
   info: { icon: ListChecks, badgeVariant: 'info' },
+  muted: { icon: AlertTriangle, badgeVariant: 'muted' },
 };
 
 function formatTempo(updatedAt: number): string {
@@ -26,7 +27,7 @@ interface AlertCardProps {
   vendedor: string;
   timestamp: number;
   kommoUrl: string;
-  severity: 'danger' | 'warning' | 'info';
+  severity: 'danger' | 'warning' | 'info' | 'muted';
   alertCount?: number;
   onArchive?: () => void;
   onComplete?: () => void;

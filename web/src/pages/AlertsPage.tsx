@@ -36,16 +36,18 @@ interface ActivityTeamData {
     leadsAbandonados48h: RawAlertLead[];
     leadsEmRisco7d: RawAlertLead[];
     tarefasVencidas: RawAlertTask[];
+    leadsDDDProibido: RawAlertLead[];
   };
 }
 
-type AlertFilter = 'todos' | 'risco48h' | 'risco7d' | 'tarefas';
+type AlertFilter = 'todos' | 'risco48h' | 'risco7d' | 'tarefas' | 'ddd';
 
 const ALERT_TYPES: Array<{ value: AlertFilter; label: string }> = [
   { value: 'todos', label: 'Todos' },
   { value: 'risco48h', label: '+48h' },
   { value: 'risco7d', label: '+7 dias' },
   { value: 'tarefas', label: 'Tarefas' },
+  { value: 'ddd', label: 'DDD Proibido' },
 ];
 
 const STORAGE_KEY_ARCHIVED = 'sg_archived_alerts';
@@ -105,6 +107,7 @@ export function AlertsPage() {
         for (const a of td.activity.leadsAbandonados48h) allAlertLeadKeys.add(`48h-${a.id}`);
         for (const a of td.activity.leadsEmRisco7d) allAlertLeadKeys.add(`7d-${a.id}`);
         for (const t of td.activity.tarefasVencidas) allAlertLeadKeys.add(`task-${t.id}`);
+        for (const a of (td.activity.leadsDDDProibido || [])) allAlertLeadKeys.add(`ddd-${a.id}`);
       }
 
       // Nao precisa remover automaticamente — o lead concluido que continua
@@ -186,6 +189,11 @@ export function AlertsPage() {
       ? filteredTeams.flatMap((t) => t.activity.tarefasVencidas)
       : [];
 
+  const alertsDDD =
+    alertFilter === 'todos' || alertFilter === 'ddd'
+      ? filteredTeams.flatMap((t) => t.activity.leadsDDDProibido || [])
+      : [];
+
   // Contadores por tab
   const countForTab = useMemo(() => {
     const allKeys: string[] = [];
@@ -193,6 +201,7 @@ export function AlertsPage() {
       for (const a of td.activity.leadsAbandonados48h) allKeys.push(`48h-${a.id}`);
       for (const a of td.activity.leadsEmRisco7d) allKeys.push(`7d-${a.id}`);
       for (const t of td.activity.tarefasVencidas) allKeys.push(`task-${t.id}`);
+      for (const a of (td.activity.leadsDDDProibido || [])) allKeys.push(`ddd-${a.id}`);
     }
 
     let concluidos = 0;
@@ -289,6 +298,7 @@ export function AlertsPage() {
           alerts48h={alerts48h}
           alerts7d={alerts7d}
           tarefas={tarefas}
+          alertsDDD={alertsDDD}
           archivedKeys={archivedKeys}
           completedKeys={completedKeys}
           alertHistory={alertHistory}
