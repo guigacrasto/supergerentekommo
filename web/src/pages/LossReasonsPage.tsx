@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { CalendarDays, XCircle } from 'lucide-react';
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import { useFilterStore } from '@/stores/filterStore';
@@ -32,7 +32,7 @@ interface LossReasonsData {
   grupos: string[];
 }
 
-const PIE_COLORS = [
+const BAR_COLORS = [
   '#9566F2', '#E05D6F', '#4ECDC4', '#FFE66D', '#FF6B6B',
   '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#87CEEB',
   '#FF8C42', '#98D8C8', '#F7DC6F', '#BB8FCE', '#82E0AA',
@@ -88,11 +88,18 @@ export function LossReasonsPage() {
   const agentes = data?.agentes ?? [];
   const grupos = data?.grupos ?? [];
   const motivos = data?.motivos ?? [];
+  const totalPerdidos = data?.totalPerdidos ?? 0;
 
-  const pieData = motivos.map((m) => ({
-    name: m.nome,
-    value: m.count,
-  }));
+  // Ordenar do maior pro menor e preparar dados para o grafico
+  const chartData = [...motivos]
+    .sort((a, b) => b.count - a.count)
+    .map((m) => ({
+      nome: m.nome,
+      count: m.count,
+      pct: totalPerdidos > 0 ? ((m.count / totalPerdidos) * 100).toFixed(1) : '0.0',
+    }));
+
+  const chartHeight = Math.max(300, chartData.length * 48 + 40);
 
   return (
     <div className="flex flex-col gap-6">
@@ -135,41 +142,39 @@ export function LossReasonsPage() {
         />
       </div>
 
-      {/* Pie Chart */}
+      {/* Horizontal Bar Chart */}
       <div className="rounded-card border border-glass-border bg-surface p-6">
         {loading ? (
-          <div className="flex items-center justify-center h-[400px]">
-            <Skeleton className="h-64 w-64 rounded-full" />
+          <div className="flex flex-col gap-4">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <Skeleton className="h-5 w-40" />
+                <Skeleton className="h-8 flex-1" />
+              </div>
+            ))}
           </div>
         ) : motivos.length === 0 ? (
           <div className="flex items-center justify-center h-[300px] text-muted text-body-md">
             Nenhum dado encontrado no per&iacute;odo selecionado.
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={420}>
-            <PieChart>
-              <Pie
-                data={pieData}
-                cx="50%"
-                cy="50%"
-                outerRadius={140}
-                innerRadius={60}
-                dataKey="value"
-                nameKey="name"
-                paddingAngle={2}
-                label={({ name, percent }) =>
-                  `${name} (${((percent ?? 0) * 100).toFixed(1)}%)`
-                }
-                labelLine={{ stroke: '#6B7280' }}
-              >
-                {pieData.map((_, index) => (
-                  <Cell
-                    key={`cell-${index}`}
-                    fill={PIE_COLORS[index % PIE_COLORS.length]}
-                  />
-                ))}
-              </Pie>
+          <ResponsiveContainer width="100%" height={chartHeight}>
+            <BarChart
+              data={chartData}
+              layout="vertical"
+              margin={{ top: 0, right: 80, left: 10, bottom: 0 }}
+            >
+              <XAxis type="number" hide />
+              <YAxis
+                type="category"
+                dataKey="nome"
+                width={220}
+                tick={{ fill: '#E0E3E9', fontSize: 13 }}
+                axisLine={false}
+                tickLine={false}
+              />
               <Tooltip
+                cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                 contentStyle={{
                   backgroundColor: '#22182D',
                   border: '1px solid rgba(255,255,255,0.1)',
@@ -177,17 +182,34 @@ export function LossReasonsPage() {
                   color: '#fff',
                 }}
                 itemStyle={{ color: '#fff' }}
-                labelStyle={{ color: '#fff' }}
-                formatter={(value) => [`${value} leads`, 'Volume']}
+                labelStyle={{ color: '#fff', fontWeight: 600 }}
+                formatter={(value: any, _name: any, props: any) => [
+                  `${value} leads (${props.payload.pct}%)`,
+                  'Volume',
+                ]}
               />
-              <Legend
-                layout="vertical"
-                align="right"
-                verticalAlign="middle"
-                iconType="circle"
-                wrapperStyle={{ color: '#E0E3E9', fontSize: '13px' }}
-              />
-            </PieChart>
+              <Bar
+                dataKey="count"
+                radius={[0, 6, 6, 0]}
+                barSize={28}
+                label={{
+                  position: 'right',
+                  fill: '#9CA3AF',
+                  fontSize: 13,
+                  formatter: (value: any) => {
+                    const item = chartData.find((d) => d.count === Number(value));
+                    return `${value}  (${item?.pct ?? 0}%)`;
+                  },
+                }}
+              >
+                {chartData.map((_, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={BAR_COLORS[index % BAR_COLORS.length]}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
           </ResponsiveContainer>
         )}
       </div>
