@@ -32,6 +32,40 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
     return null;
   }
 
+  // Build group user IDs set considering both permission and explicit filter
+  function buildGroupFilter(
+    allMetrics: Array<{ team: string; metrics: any }>,
+    groupFilter: string,
+    allowedGroups: Record<string, string[]>,
+  ): { groupUserIds: Set<number> | null; allGroups: Set<string> } {
+    let groupUserIds: Set<number> | null = null;
+    const allGroups = new Set<string>();
+
+    for (const { team, metrics } of allMetrics) {
+      const teamAllowed = allowedGroups[team] || [];
+      const hasPermRestriction = teamAllowed.length > 0;
+
+      for (const [userId, groupName] of Object.entries(metrics.userGroups as Record<string, string>)) {
+        // Skip groups not in user's allowed list (if restriction exists)
+        if (hasPermRestriction && !teamAllowed.includes(groupName)) continue;
+
+        allGroups.add(groupName);
+
+        // Apply explicit filter or permission restriction
+        if (groupFilter && groupName === groupFilter) {
+          if (!groupUserIds) groupUserIds = new Set<number>();
+          groupUserIds.add(Number(userId));
+        } else if (!groupFilter && hasPermRestriction) {
+          // No explicit filter but has perm restriction — include all allowed
+          if (!groupUserIds) groupUserIds = new Set<number>();
+          groupUserIds.add(Number(userId));
+        }
+      }
+    }
+
+    return { groupUserIds, allGroups };
+  }
+
   async function getFilteredMetrics(req: AuthRequest) {
     const userTeams = req.userTeams || [];
     const { tags, tagMode } = parseTagsFromQuery(req.query);
@@ -249,18 +283,7 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
 
       const allMetrics = await getFilteredMetrics(req);
 
-      // Build group user IDs set for filtering
-      let groupUserIds: Set<number> | null = null;
-      const allGroups = new Set<string>();
-      for (const { metrics } of allMetrics) {
-        for (const [userId, groupName] of Object.entries(metrics.userGroups)) {
-          allGroups.add(groupName);
-          if (groupFilter && groupName === groupFilter) {
-            if (!groupUserIds) groupUserIds = new Set<number>();
-            groupUserIds.add(Number(userId));
-          }
-        }
-      }
+      const { groupUserIds, allGroups } = buildGroupFilter(allMetrics, groupFilter, req.allowedGroups || {});
 
       // Collect all funnel names and agent names across teams
       const funisSet = new Set<string>();
@@ -366,18 +389,7 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
         allMetrics = allMetrics.filter(({ team }) => team === teamFilterParam);
       }
 
-      // Build group user IDs set for filtering
-      let groupUserIds: Set<number> | null = null;
-      const allGroups = new Set<string>();
-      for (const { metrics } of allMetrics) {
-        for (const [userId, groupName] of Object.entries(metrics.userGroups)) {
-          allGroups.add(groupName);
-          if (groupFilter && groupName === groupFilter) {
-            if (!groupUserIds) groupUserIds = new Set<number>();
-            groupUserIds.add(Number(userId));
-          }
-        }
-      }
+      const { groupUserIds, allGroups } = buildGroupFilter(allMetrics, groupFilter, req.allowedGroups || {});
 
       // Collect funnel/agent lists and build lookup maps
       const funisSet = new Set<string>();
@@ -515,18 +527,7 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
     try {
       const allMetrics = await getFilteredMetrics(req);
 
-      // Build group user IDs set
-      let groupUserIds: Set<number> | null = null;
-      const allGroups = new Set<string>();
-      for (const { metrics } of allMetrics) {
-        for (const [userId, groupName] of Object.entries(metrics.userGroups)) {
-          allGroups.add(groupName);
-          if (groupFilter && groupName === groupFilter) {
-            if (!groupUserIds) groupUserIds = new Set<number>();
-            groupUserIds.add(Number(userId));
-          }
-        }
-      }
+      const { groupUserIds, allGroups } = buildGroupFilter(allMetrics, groupFilter, req.allowedGroups || {});
 
       // Collect all lost leads in range
       const lostLeads: Array<{
@@ -652,18 +653,7 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
     try {
       const allMetrics = await getFilteredMetrics(req);
 
-      // Build group user IDs set for filtering
-      let groupUserIds: Set<number> | null = null;
-      const allGroups = new Set<string>();
-      for (const { metrics } of allMetrics) {
-        for (const [userId, groupName] of Object.entries(metrics.userGroups)) {
-          allGroups.add(groupName);
-          if (groupFilter && groupName === groupFilter) {
-            if (!groupUserIds) groupUserIds = new Set<number>();
-            groupUserIds.add(Number(userId));
-          }
-        }
-      }
+      const { groupUserIds, allGroups } = buildGroupFilter(allMetrics, groupFilter, req.allowedGroups || {});
 
       // Collect leads in date range
       const leads: Array<{
@@ -745,18 +735,7 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
     try {
       const allMetrics = await getFilteredMetrics(req);
 
-      // Build group user IDs set for filtering
-      let groupUserIds: Set<number> | null = null;
-      const allGroups = new Set<string>();
-      for (const { metrics } of allMetrics) {
-        for (const [userId, groupName] of Object.entries(metrics.userGroups)) {
-          allGroups.add(groupName);
-          if (groupFilter && groupName === groupFilter) {
-            if (!groupUserIds) groupUserIds = new Set<number>();
-            groupUserIds.add(Number(userId));
-          }
-        }
-      }
+      const { groupUserIds, allGroups } = buildGroupFilter(allMetrics, groupFilter, req.allowedGroups || {});
 
       // Collect leads in date range
       const leads: Array<{
@@ -876,8 +855,14 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
             };
           });
 
-          // Collect unique groups for this team
-          const gruposSet = new Set(Object.values(metrics.userGroups));
+          // Collect unique groups for this team (filtered by permissions)
+          const teamAllowed = (req.allowedGroups || {})[team] || [];
+          const gruposSet = new Set<string>();
+          for (const gName of Object.values(metrics.userGroups)) {
+            if (teamAllowed.length === 0 || teamAllowed.includes(gName)) {
+              gruposSet.add(gName);
+            }
+          }
 
           return { team, summary, agents, vendedores, activity, grupos: Array.from(gruposSet).sort() };
         })

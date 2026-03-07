@@ -33,6 +33,7 @@ interface AdminUser {
   status: string;
   teams: string[];
   allowed_funnels: Record<string, number[]>;
+  allowed_groups: Record<string, string[]>;
 }
 
 /* ---------- Helpers ---------- */
@@ -192,13 +193,17 @@ function PipelineSection({
 function UserFunnelPanel({
   user,
   pipelines,
+  availableGroups,
   onSave,
   onSaveTeams,
+  onSaveGroups,
 }: {
   user: AdminUser;
   pipelines: AdminPipeline[];
+  availableGroups: Record<string, string[]>;
   onSave: (userId: string, team: string, funnelIds: number[]) => Promise<void>;
   onSaveTeams: (userId: string, teams: string[]) => Promise<void>;
+  onSaveGroups: (userId: string, team: string, groups: string[]) => Promise<void>;
 }) {
   const grouped = groupByTeam(pipelines);
   const allTeamKeys = Object.keys(grouped);
@@ -210,11 +215,21 @@ function UserFunnelPanel({
     }
     return init;
   });
+  const [selectedGroups, setSelectedGroups] = useState<Record<string, Set<string>>>(() => {
+    const init: Record<string, Set<string>> = {};
+    for (const team of allTeamKeys) {
+      const allowed = user.allowed_groups?.[team] ?? [];
+      init[team] = new Set(allowed);
+    }
+    return init;
+  });
   const [userTeams, setUserTeams] = useState<Set<string>>(() => new Set(user.teams || []));
   const [saving, setSaving] = useState<string | null>(null);
   const [savedTeam, setSavedTeam] = useState<string | null>(null);
   const [savingTeams, setSavingTeams] = useState(false);
   const [savedTeams, setSavedTeams] = useState(false);
+  const [savingGroups, setSavingGroups] = useState<string | null>(null);
+  const [savedGroupTeam, setSavedGroupTeam] = useState<string | null>(null);
 
   const toggleTeam = (team: string) => {
     setUserTeams((prev) => {
@@ -262,6 +277,33 @@ function UserFunnelPanel({
       [team]: new Set(teamPipelines.map((p) => p.id)),
     }));
     setSavedTeam(null);
+  };
+
+  const toggleGroup = (team: string, groupName: string) => {
+    setSelectedGroups((prev) => {
+      const next = { ...prev };
+      const s = new Set(prev[team] ?? []);
+      if (s.has(groupName)) {
+        s.delete(groupName);
+      } else {
+        s.add(groupName);
+      }
+      next[team] = s;
+      return next;
+    });
+    setSavedGroupTeam(null);
+  };
+
+  const handleSaveGroups = async (team: string) => {
+    setSavingGroups(team);
+    try {
+      const groups = Array.from(selectedGroups[team] ?? []);
+      await onSaveGroups(user.id, team, groups);
+      setSavedGroupTeam(team);
+      setTimeout(() => setSavedGroupTeam(null), 3000);
+    } finally {
+      setSavingGroups(null);
+    }
   };
 
   const handleSave = async (team: string) => {
@@ -381,6 +423,62 @@ function UserFunnelPanel({
           </div>
         </div>
       ))}
+
+      {/* Group permissions per team */}
+      {Object.entries(grouped).map(([team]) => {
+        const teamGroups = availableGroups[team] ?? [];
+        if (teamGroups.length === 0) return null;
+        return (
+          <div key={`groups-${team}`}>
+            <h5 className="font-heading text-body-sm font-semibold uppercase tracking-wider text-muted mb-2">
+              Equipes — {TEAM_LABELS[team] || team}
+            </h5>
+            <p className="text-body-sm text-muted mb-2">
+              Sem sele&ccedil;&atilde;o = acesso a todas as equipes
+            </p>
+            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+              {teamGroups.map((groupName) => {
+                const isChecked = selectedGroups[team]?.has(groupName) ?? false;
+                return (
+                  <label
+                    key={groupName}
+                    className={cn(
+                      'flex items-center gap-2.5 rounded-button px-3 py-2 text-body-sm cursor-pointer transition-colors',
+                      isChecked
+                        ? 'bg-info/10 text-foreground'
+                        : 'text-muted hover:bg-surface-secondary'
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => toggleGroup(team, groupName)}
+                      className="h-4 w-4 rounded border-glass-border bg-surface-secondary text-info focus:ring-info accent-info"
+                    />
+                    {groupName}
+                  </label>
+                );
+              })}
+            </div>
+            <div className="mt-3 flex items-center gap-3">
+              <Button
+                size="sm"
+                onClick={() => handleSaveGroups(team)}
+                loading={savingGroups === team}
+                disabled={savingGroups === team}
+              >
+                Salvar Equipes {TEAM_LABELS[team]?.split(' ')[1] || team}
+              </Button>
+              {savedGroupTeam === team && (
+                <span className="inline-flex items-center gap-1 rounded-badge bg-success/10 px-2 py-1 text-body-sm text-success">
+                  <Check className="h-3.5 w-3.5" />
+                  Salvo
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -390,15 +488,19 @@ function UserFunnelPanel({
 function UsersSection({
   users,
   pipelines,
+  availableGroups,
   loading,
   onSaveFunnels,
   onSaveTeams,
+  onSaveGroups,
 }: {
   users: AdminUser[];
   pipelines: AdminPipeline[];
+  availableGroups: Record<string, string[]>;
   loading: boolean;
   onSaveFunnels: (userId: string, team: string, funnelIds: number[]) => Promise<void>;
   onSaveTeams: (userId: string, teams: string[]) => Promise<void>;
+  onSaveGroups: (userId: string, team: string, groups: string[]) => Promise<void>;
 }) {
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
 
@@ -428,7 +530,7 @@ function UsersSection({
           <div className="flex h-9 w-9 items-center justify-center rounded-button bg-primary/10">
             <Users className="h-5 w-5 text-primary" />
           </div>
-          <CardTitle>Usuários e Funis</CardTitle>
+          <CardTitle>Usuários, Funis e Equipes</CardTitle>
         </div>
         <Badge variant="accent">{users.length} usuários</Badge>
       </CardHeader>
@@ -443,6 +545,7 @@ function UsersSection({
               <th className="px-4 py-3 text-left font-medium">Perfil</th>
               <th className="px-4 py-3 text-left font-medium">Status</th>
               <th className="px-4 py-3 text-left font-medium">Times</th>
+              <th className="px-4 py-3 text-left font-medium">Equipes</th>
               <th className="px-4 py-3 text-center font-medium">Funis</th>
             </tr>
           </thead>
@@ -469,6 +572,9 @@ function UsersSection({
                     <Skeleton className="h-5 w-24" />
                   </td>
                   <td className="border-t border-glass-border px-4 py-3">
+                    <Skeleton className="h-5 w-24" />
+                  </td>
+                  <td className="border-t border-glass-border px-4 py-3">
                     <Skeleton className="mx-auto h-8 w-24" />
                   </td>
                 </tr>
@@ -476,7 +582,7 @@ function UsersSection({
             ) : users.length === 0 ? (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   className="border-t border-glass-border px-4 py-8 text-center text-muted text-body-md"
                 >
                   Nenhum usuário encontrado.
@@ -488,7 +594,7 @@ function UsersSection({
                 return (
                   <tr key={user.id} className="group">
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       className="border-t border-glass-border p-0"
                     >
                       {/* Row content */}
@@ -526,13 +632,27 @@ function UsersSection({
                             ))}
                           </div>
                         </div>
+                        <div className="px-4 py-3">
+                          <div className="flex flex-wrap gap-1">
+                            {Object.entries(user.allowed_groups || {}).flatMap(([, groups]) =>
+                              (groups as string[]).map((g) => (
+                                <Badge key={g} variant="default">
+                                  {g.replace(/^Equipe\s+/i, '')}
+                                </Badge>
+                              ))
+                            )}
+                            {Object.values(user.allowed_groups || {}).every((g) => (g as string[]).length === 0) && (
+                              <span className="text-body-sm text-muted">Todas</span>
+                            )}
+                          </div>
+                        </div>
                         <div className="px-4 py-3 text-center">
                           <Button
                             size="sm"
                             variant={isExpanded ? 'secondary' : 'ghost'}
                             onClick={() => toggleExpand(user.id)}
                           >
-                            Editar Funis
+                            Editar
                           </Button>
                         </div>
                       </div>
@@ -543,8 +663,10 @@ function UsersSection({
                           <UserFunnelPanel
                             user={user}
                             pipelines={pipelines}
+                            availableGroups={availableGroups}
                             onSave={onSaveFunnels}
                             onSaveTeams={onSaveTeams}
+                            onSaveGroups={onSaveGroups}
                           />
                         </div>
                       )}
@@ -566,6 +688,7 @@ export function AdminPage() {
   const user = useAuthStore((s) => s.user);
   const [pipelines, setPipelines] = useState<AdminPipeline[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [availableGroups, setAvailableGroups] = useState<Record<string, string[]>>({});
   const [loadingPipelines, setLoadingPipelines] = useState(true);
   const [loadingUsers, setLoadingUsers] = useState(true);
 
@@ -595,11 +718,21 @@ export function AdminPage() {
     }
   }, []);
 
+  const fetchGroups = useCallback(async () => {
+    try {
+      const res = await api.get<Record<string, string[]>>('/admin/groups');
+      setAvailableGroups(res.data);
+    } catch (err) {
+      console.error('[AdminPage] Erro ao carregar grupos:', err);
+    }
+  }, []);
+
   useEffect(() => {
     if (!isAdmin) return;
     fetchPipelines();
     fetchUsers();
-  }, [isAdmin, fetchPipelines, fetchUsers]);
+    fetchGroups();
+  }, [isAdmin, fetchPipelines, fetchUsers, fetchGroups]);
 
   const handleTogglePause = async (pipelineId: number, paused: boolean) => {
     try {
@@ -652,6 +785,34 @@ export function AdminPage() {
     }
   };
 
+  const handleSaveGroups = async (
+    userId: string,
+    team: string,
+    groups: string[]
+  ) => {
+    try {
+      await api.patch(`/admin/users/${userId}/groups`, {
+        team,
+        allowed_groups: groups,
+      });
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === userId
+            ? {
+                ...u,
+                allowed_groups: {
+                  ...u.allowed_groups,
+                  [team]: groups,
+                },
+              }
+            : u
+        )
+      );
+    } catch (err) {
+      console.error('[AdminPage] Erro ao salvar grupos:', err);
+    }
+  };
+
   if (!isAdmin) {
     return (
       <div className="flex flex-col items-center justify-center py-24">
@@ -670,7 +831,7 @@ export function AdminPage() {
       <div>
         <h1 className="font-heading text-heading-md">Administração</h1>
         <p className="mt-1 text-body-md text-muted">
-          Gerencie pipelines, usuários e permissões de funis.
+          Gerencie pipelines, usu&aacute;rios, funis e equipes.
         </p>
       </div>
 
@@ -681,13 +842,15 @@ export function AdminPage() {
         onTogglePause={handleTogglePause}
       />
 
-      {/* Section 2: Users & Funnels (F08) */}
+      {/* Section 2: Users, Funnels & Groups */}
       <UsersSection
         users={users}
         pipelines={pipelines}
+        availableGroups={availableGroups}
         loading={loadingUsers}
         onSaveFunnels={handleSaveFunnels}
         onSaveTeams={handleSaveTeams}
+        onSaveGroups={handleSaveGroups}
       />
     </div>
   );

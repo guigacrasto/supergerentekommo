@@ -12,6 +12,7 @@ export interface AuthRequest extends Request {
   userRole?: string;
   userTeams?: TeamKey[];
   allowedFunnels?: Record<string, number[]>;
+  allowedGroups?: Record<string, string[]>;
   pausedPipelines?: number[];
 }
 
@@ -21,6 +22,7 @@ interface CachedProfile {
   role: string;
   teams: TeamKey[];
   allowedFunnels: Record<string, number[]>;
+  allowedGroups: Record<string, string[]>;
   pausedPipelines: number[];
   expiresAt: number;
 }
@@ -54,6 +56,7 @@ export async function requireAuth(
     req.userRole = cached.role;
     req.userTeams = cached.teams;
     req.allowedFunnels = cached.allowedFunnels;
+    req.allowedGroups = cached.allowedGroups;
     req.pausedPipelines = cached.pausedPipelines;
     return next();
   }
@@ -76,8 +79,8 @@ export async function requireAuth(
     return;
   }
 
-  // Fetch funnel permissions + paused pipelines in parallel
-  const [permissionsResult, pausedResult] = await Promise.all([
+  // Fetch funnel permissions + paused pipelines + group permissions in parallel
+  const [permissionsResult, pausedResult, groupResult] = await Promise.all([
     supabase
       .from("user_funnel_permissions")
       .select("team, allowed_funnels")
@@ -86,6 +89,11 @@ export async function requireAuth(
       .from("settings")
       .select("value")
       .eq("key", "paused_pipelines")
+      .single(),
+    supabase
+      .from("settings")
+      .select("value")
+      .eq("key", `user_groups:${user.id}`)
       .single(),
   ]);
 
@@ -108,6 +116,20 @@ export async function requireAuth(
     }
   }
 
+  const allowedGroups: Record<string, string[]> = { azul: [], amarela: [] };
+  if (groupResult.data?.value) {
+    try {
+      const val = typeof groupResult.data.value === "string"
+        ? JSON.parse(groupResult.data.value)
+        : groupResult.data.value;
+      for (const [team, groups] of Object.entries(val)) {
+        if (Array.isArray(groups)) allowedGroups[team] = groups;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   // Admins always see all configured teams
   const teams: TeamKey[] = profile.role === "admin"
     ? ALL_CONFIGURED_TEAMS
@@ -119,6 +141,7 @@ export async function requireAuth(
     role: profile.role,
     teams,
     allowedFunnels,
+    allowedGroups,
     pausedPipelines,
     expiresAt: Date.now() + AUTH_CACHE_TTL_MS,
   });
@@ -127,6 +150,7 @@ export async function requireAuth(
   req.userRole = profile.role;
   req.userTeams = teams;
   req.allowedFunnels = allowedFunnels;
+  req.allowedGroups = allowedGroups;
   req.pausedPipelines = pausedPipelines;
   next();
 }

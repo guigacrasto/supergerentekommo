@@ -139,7 +139,40 @@ export function adminRouter(services: Record<TeamKey, KommoService>) {
   // F08 — Gestao de Funis por Usuario
   // ──────────────────────────────────────────────
 
-  // GET /api/admin/users — Lista usuarios com permissoes de funil
+  // GET /api/admin/groups — Lista grupos Kommo disponiveis por time
+  router.get("/groups", async (req: AuthRequest, res) => {
+    if (req.userRole !== "admin") {
+      res.status(403).json({ error: "Acesso restrito a administradores." });
+      return;
+    }
+
+    try {
+      const configuredTeams = (Object.keys(TEAMS) as TeamKey[]).filter(
+        (k) => TEAMS[k].subdomain && services[k]
+      );
+
+      const gruposByTeam: Record<string, string[]> = {};
+      await Promise.all(
+        configuredTeams.map(async (team) => {
+          try {
+            const metrics = await getCrmMetrics(team, services[team]);
+            const gruposSet = new Set(Object.values(metrics.userGroups));
+            gruposByTeam[team] = Array.from(gruposSet).sort();
+          } catch (err: any) {
+            console.error(`[Admin] Erro ao buscar grupos da equipe ${team}:`, err.message);
+            gruposByTeam[team] = [];
+          }
+        })
+      );
+
+      res.json(gruposByTeam);
+    } catch (error: any) {
+      console.error("[Admin] Erro ao listar grupos:", error.message);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // GET /api/admin/users — Lista usuarios com permissoes de funil e grupo
   router.get("/users", async (req: AuthRequest, res) => {
     if (req.userRole !== "admin") {
       res.status(403).json({ error: "Acesso restrito a administradores." });
@@ -170,8 +203,26 @@ export function adminRouter(services: Record<TeamKey, KommoService>) {
           }
         }
       } catch {
-        // Tabela pode nao existir ainda — retornar vazio
         console.warn("[Admin] Tabela user_funnel_permissions nao encontrada, retornando vazio.");
+      }
+
+      // Buscar permissoes de grupo (settings table: user_groups:{userId})
+      const groupPermMap: Record<string, Record<string, string[]>> = {};
+      try {
+        const { data: groupSettings } = await supabase
+          .from("settings")
+          .select("key, value")
+          .like("key", "user_groups:%");
+
+        if (groupSettings) {
+          for (const s of groupSettings) {
+            const userId = s.key.replace("user_groups:", "");
+            const val = typeof s.value === "string" ? JSON.parse(s.value) : s.value;
+            groupPermMap[userId] = val || {};
+          }
+        }
+      } catch {
+        console.warn("[Admin] Erro ao buscar permissoes de grupo.");
       }
 
       const result = (profiles || []).map((p) => ({
@@ -182,6 +233,7 @@ export function adminRouter(services: Record<TeamKey, KommoService>) {
         status: p.status,
         teams: p.teams,
         allowed_funnels: permissionsMap[p.id] || [],
+        allowed_groups: groupPermMap[p.id] || {},
       }));
 
       res.json(result);
@@ -235,6 +287,59 @@ export function adminRouter(services: Record<TeamKey, KommoService>) {
       res.json({ ok: true });
     } catch (error: any) {
       console.error("[Admin] Erro ao atualizar funis do usuario:", error.message);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // PATCH /api/admin/users/:id/groups — Atualiza grupos permitidos de um usuario
+  router.patch("/users/:id/groups", async (req: AuthRequest, res) => {
+    if (req.userRole !== "admin") {
+      res.status(403).json({ error: "Acesso restrito a administradores." });
+      return;
+    }
+
+    const userId = req.params.id;
+    const { team, allowed_groups } = req.body;
+
+    if (!team || !Array.isArray(allowed_groups)) {
+      res.status(400).json({ error: "Body deve conter team (string) e allowed_groups (string[])." });
+      return;
+    }
+
+    try {
+      // Ler valor atual de grupos do usuario
+      const settingsKey = `user_groups:${userId}`;
+      const { data: existing } = await supabase
+        .from("settings")
+        .select("value")
+        .eq("key", settingsKey)
+        .single();
+
+      let current: Record<string, string[]> = {};
+      if (existing?.value) {
+        current = typeof existing.value === "string" ? JSON.parse(existing.value) : existing.value;
+      }
+
+      // Atualizar apenas o time especificado
+      current[team] = allowed_groups;
+
+      const { error } = await supabase
+        .from("settings")
+        .upsert(
+          { key: settingsKey, value: current, updated_at: new Date().toISOString() },
+          { onConflict: "key" }
+        );
+
+      if (error) {
+        console.error("[Admin] Erro ao salvar permissoes de grupo:", error.message);
+        res.status(500).json({ error: error.message });
+        return;
+      }
+
+      console.log(`[Admin] Grupos do usuario ${userId} (equipe ${team}) atualizados: [${allowed_groups.join(", ")}]`);
+      res.json({ ok: true });
+    } catch (error: any) {
+      console.error("[Admin] Erro ao atualizar grupos do usuario:", error.message);
       res.status(500).json({ error: error.message });
     }
   });
