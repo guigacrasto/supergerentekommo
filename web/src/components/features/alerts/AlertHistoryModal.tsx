@@ -18,7 +18,7 @@ export function AlertHistoryModal({ history, onClose }: AlertHistoryModalProps) 
       <div className="relative z-10 w-full max-w-md rounded-card border border-glass-border bg-surface shadow-lg">
         <div className="flex items-center justify-between border-b border-glass-border px-5 py-4">
           <h3 className="font-heading text-heading-sm">
-            Hist&oacute;rico de Alertas
+            Histórico de Alertas
           </h3>
           <button
             onClick={onClose}
@@ -30,7 +30,7 @@ export function AlertHistoryModal({ history, onClose }: AlertHistoryModalProps) 
         <div className="max-h-[400px] overflow-y-auto p-4">
           {history.length === 0 ? (
             <p className="text-body-md text-muted text-center py-4">
-              Nenhum hist&oacute;rico encontrado.
+              Nenhum histórico encontrado.
             </p>
           ) : (
             <div className="flex flex-col gap-3">

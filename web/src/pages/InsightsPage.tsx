@@ -272,7 +272,7 @@ export function InsightsPage() {
               : 'border-transparent text-muted hover:text-foreground'
           )}
         >
-          Historico
+          Histórico
           {activeHistory.length > 0 && (
             <span className="ml-1.5 inline-flex items-center justify-center h-5 min-w-[20px] px-1 rounded-full bg-surface-secondary text-xs text-muted">
               {activeHistory.length}
@@ -330,7 +330,7 @@ export function InsightsPage() {
               {viewingReport && (
                 <div className="flex items-center gap-2 text-body-sm text-muted">
                   <Clock className="h-4 w-4" />
-                  Visualizando relatorio de {viewingReport.createdAt}
+                  Visualizando relatório de {viewingReport.createdAt}
                   {viewingReport.funil && ` | Funil: ${viewingReport.funil}`}
                   {viewingReport.agente && ` | Agente: ${viewingReport.agente}`}
                 </div>
@@ -384,8 +384,8 @@ export function InsightsPage() {
           onView={handleViewReport}
           onArchive={handleArchive}
           onDelete={handleDeleteReport}
-          emptyTitle="Nenhum relatorio no historico"
-          emptyDescription="Gere insights para que os relatorios aparecam aqui."
+          emptyTitle="Nenhum relatório no histórico"
+          emptyDescription="Gere insights para que os relatórios apareçam aqui."
         />
       )}
 
@@ -395,8 +395,8 @@ export function InsightsPage() {
           onView={handleViewReport}
           onArchive={handleArchive}
           onDelete={handleDeleteReport}
-          emptyTitle="Nenhum relatorio arquivado"
-          emptyDescription="Seus relatorios arquivados aparecerão aqui."
+          emptyTitle="Nenhum relatório arquivado"
+          emptyDescription="Seus relatórios arquivados aparecerão aqui."
         />
       )}
     </div>
@@ -513,7 +513,7 @@ function ReportList({
               <div className="flex items-center gap-3 mt-1 text-body-sm text-muted">
                 <span>{report.data.length} agente{report.data.length !== 1 ? 's' : ''}</span>
                 <span>{totalConversas} conversa{totalConversas !== 1 ? 's' : ''}</span>
-                <span>Qualidade media: {avgQuality.toFixed(1)}</span>
+                <span>Qualidade média: {avgQuality.toFixed(1)}</span>
               </div>
             </div>
 

@@ -85,7 +85,7 @@ export function RendaPage() {
             onChange={(e) => setFrom(e.target.value)}
             className="rounded-button border border-glass-border bg-surface-secondary px-3 py-2 text-body-md text-foreground focus:outline-none focus:border-primary transition-colors"
           />
-          <span className="text-muted text-body-sm">at&eacute;</span>
+          <span className="text-muted text-body-sm">até</span>
           <input
             type="date"
             value={to}
@@ -108,8 +108,8 @@ export function RendaPage() {
               <th className="px-4 py-3 text-left font-medium">Faixa</th>
               <th className="px-4 py-3 text-right font-medium">Volume</th>
               <th className="px-4 py-3 text-right font-medium">Fechamentos</th>
-              <th className="px-4 py-3 text-right font-medium">Convers&atilde;o %</th>
-              <th className="px-4 py-3 text-right font-medium">Ticket M&eacute;dio</th>
+              <th className="px-4 py-3 text-right font-medium">Conversão %</th>
+              <th className="px-4 py-3 text-right font-medium">Ticket Médio</th>
             </tr>
           </thead>
           <tbody>
@@ -136,7 +136,7 @@ export function RendaPage() {
             ) : faixas.length === 0 ? (
               <tr>
                 <td colSpan={5} className="border-t border-glass-border px-4 py-8 text-center text-muted text-body-md">
-                  Nenhum dado encontrado no per&iacute;odo selecionado.
+                  Nenhum dado encontrado no período selecionado.
                 </td>
               </tr>
             ) : (

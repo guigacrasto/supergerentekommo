@@ -115,7 +115,7 @@ export function LossReasonsPage() {
             onChange={(e) => setFrom(e.target.value)}
             className="rounded-button border border-glass-border bg-surface-secondary px-3 py-2 text-body-md text-foreground focus:outline-none focus:border-primary transition-colors"
           />
-          <span className="text-muted text-body-sm">at&eacute;</span>
+          <span className="text-muted text-body-sm">até</span>
           <input
             type="date"
             value={to}
@@ -155,7 +155,7 @@ export function LossReasonsPage() {
           </div>
         ) : motivos.length === 0 ? (
           <div className="flex items-center justify-center h-[300px] text-muted text-body-md">
-            Nenhum dado encontrado no per&iacute;odo selecionado.
+            Nenhum dado encontrado no período selecionado.
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={chartHeight}>

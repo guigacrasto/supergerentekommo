@@ -220,7 +220,7 @@ export function AlertList({
   if (!hasItems) {
     const emptyMessages: Record<AlertTab, { title: string; desc: string }> = {
       ativos: { title: 'Tudo em dia!', desc: 'Nenhum alerta ativo no momento.' },
-      concluidos: { title: 'Nenhum alerta concluido', desc: 'Alertas marcados como concluidos aparecerão aqui.' },
+      concluidos: { title: 'Nenhum alerta concluído', desc: 'Alertas marcados como concluídos aparecerão aqui.' },
       arquivados: { title: 'Nenhum alerta arquivado', desc: 'Alertas arquivados aparecerão aqui.' },
     };
     const msg = emptyMessages[tab];

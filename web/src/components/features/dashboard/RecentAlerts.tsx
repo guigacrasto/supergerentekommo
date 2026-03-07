@@ -63,7 +63,7 @@ export function RecentAlerts({ alerts48h, alerts7d, tarefas }: RecentAlertsProps
           to="/alerts"
           className="text-body-sm text-primary hover:text-primary-600 transition-colors font-heading font-medium"
         >
-          Ver todos &rarr;
+          Ver todos →
         </Link>
       </CardHeader>
 

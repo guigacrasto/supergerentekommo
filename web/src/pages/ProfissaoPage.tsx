@@ -132,7 +132,7 @@ export function ProfissaoPage() {
             onChange={(e) => setFrom(e.target.value)}
             className="rounded-button border border-glass-border bg-surface-secondary px-3 py-2 text-body-md text-foreground focus:outline-none focus:border-primary transition-colors"
           />
-          <span className="text-muted text-body-sm">at&eacute;</span>
+          <span className="text-muted text-body-sm">até</span>
           <input
             type="date"
             value={to}
@@ -194,7 +194,7 @@ export function ProfissaoPage() {
             ) : sortedProfissoes.length === 0 ? (
               <tr>
                 <td colSpan={5} className="border-t border-glass-border px-4 py-8 text-center text-muted text-body-md">
-                  Nenhum dado encontrado no per&iacute;odo selecionado.
+                  Nenhum dado encontrado no período selecionado.
                 </td>
               </tr>
             ) : (

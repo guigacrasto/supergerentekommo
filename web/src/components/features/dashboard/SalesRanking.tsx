@@ -35,7 +35,7 @@ export function SalesRanking({ title, data }: SalesRankingProps) {
       <div className="p-5">
         {sorted.length === 0 ? (
           <p className="text-center text-body-md text-muted py-6">
-            Nenhuma venda neste periodo.
+            Nenhuma venda neste período.
           </p>
         ) : (
           <div className="flex flex-col gap-3">

@@ -434,7 +434,7 @@ function UserFunnelPanel({
               Equipes — {TEAM_LABELS[team] || team}
             </h5>
             <p className="text-body-sm text-muted mb-2">
-              Sem sele&ccedil;&atilde;o = acesso a todas as equipes
+              Sem seleção = acesso a todas as equipes
             </p>
             <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
               {teamGroups.map((groupName) => {
@@ -831,7 +831,7 @@ export function AdminPage() {
       <div>
         <h1 className="font-heading text-heading-md">Administração</h1>
         <p className="mt-1 text-body-md text-muted">
-          Gerencie pipelines, usu&aacute;rios, funis e equipes.
+          Gerencie pipelines, usuários, funis e equipes.
         </p>
       </div>
 

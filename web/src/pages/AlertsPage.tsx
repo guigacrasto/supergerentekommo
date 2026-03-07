@@ -143,7 +143,7 @@ export function AlertsPage() {
     setCompletedKeys(newCompleted);
     saveSet(STORAGE_KEY_COMPLETED, newCompleted);
 
-    addHistoryEntry(leadId, type, 'Concluido');
+    addHistoryEntry(leadId, type, 'Concluído');
   };
 
   const addHistoryEntry = (leadId: number, type: string, action: string) => {
@@ -255,7 +255,7 @@ export function AlertsPage() {
               : 'border-transparent text-muted hover:text-foreground'
           )}
         >
-          Concluidos
+          Concluídos
           {countForTab.concluidos > 0 && (
             <span className="ml-1.5 inline-flex items-center justify-center h-5 min-w-[20px] px-1 rounded-full bg-success/10 text-xs text-success">
               {countForTab.concluidos}

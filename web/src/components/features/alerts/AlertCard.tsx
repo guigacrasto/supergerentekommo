@@ -83,7 +83,7 @@ export function AlertCard({
           <button
             onClick={(e) => { e.stopPropagation(); onComplete(); }}
             className="opacity-0 group-hover:opacity-100 p-1 rounded-button text-muted hover:text-success hover:bg-success/10 transition-all cursor-pointer"
-            title="Marcar como concluido"
+            title="Marcar como concluído"
           >
             <Check className="h-4 w-4" />
           </button>
