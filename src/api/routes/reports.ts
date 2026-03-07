@@ -964,6 +964,7 @@ export function reportsRouter(services: Record<TeamKey, KommoService>) {
       }
 
       const ddds = Object.entries(dddMap)
+        .filter(([ddd]) => ddd !== "Não identificado")
         .map(([ddd, data]) => ({
           ddd,
           estado: DDD_TO_ESTADO[ddd] || "",
