@@ -3,6 +3,9 @@ import { AppShell } from '@/components/layout/AppShell';
 import { AuthLayout } from '@/components/layout/AuthLayout';
 import { LoginPage } from '@/pages/LoginPage';
 import { RegisterPage } from '@/pages/RegisterPage';
+import { ForgotPasswordPage } from '@/pages/ForgotPasswordPage';
+import { ResetPasswordPage } from '@/pages/ResetPasswordPage';
+import { ProfilePage } from '@/pages/ProfilePage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { ChatPage } from '@/pages/ChatPage';
 import { AgentsPage } from '@/pages/AgentsPage';
@@ -24,6 +27,8 @@ export default function App() {
         <Route element={<AuthLayout />}>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
         </Route>
         <Route element={<AppShell />}>
           <Route path="/" element={<DashboardPage />} />
@@ -39,6 +44,7 @@ export default function App() {
           <Route path="/alerts" element={<AlertsPage />} />
           <Route path="/insights" element={<InsightsPage />} />
           <Route path="/admin" element={<AdminPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
         </Route>
       </Routes>
     </BrowserRouter>

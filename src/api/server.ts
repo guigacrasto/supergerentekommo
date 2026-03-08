@@ -3,7 +3,7 @@ import cors from "cors";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { KommoService } from "../services/kommo.js";
-import { TeamKey } from "../config.js";
+import { TeamKey, corsOrigins } from "../config.js";
 import { pipelinesRouter } from "./routes/pipelines.js";
 import { leadsRouter } from "./routes/leads.js";
 import { reportsRouter } from "./routes/reports.js";
@@ -19,7 +19,19 @@ const __dirname = dirname(__filename);
 export function createServer(services: Record<TeamKey, KommoService>) {
   const app = express();
 
-  app.use(cors());
+  app.use(
+    cors(
+      corsOrigins.length > 0
+        ? {
+            origin: (origin, cb) => {
+              if (!origin || corsOrigins.includes(origin)) cb(null, true);
+              else cb(new Error("CORS blocked"));
+            },
+            credentials: true,
+          }
+        : undefined
+    )
+  );
   app.use(express.json());
 
   // Health check — returns 503 until cache is warm so Railway waits

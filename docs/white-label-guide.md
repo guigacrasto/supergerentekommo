@@ -478,6 +478,88 @@ git push origin main
 
 ---
 
+## Configurar Email (Resend)
+
+### Obter API Key
+
+1. Acesse https://resend.com e crie uma conta
+2. Vá em **API Keys** → **Create API Key**
+3. Copie a chave gerada (começa com `re_`)
+
+### Configurar domínio de envio
+
+1. No Resend, vá em **Domains** → **Add Domain**
+2. Adicione o domínio do cliente (ex: `empresa.com.br`)
+3. Configure os registros DNS (SPF, DKIM, DMARC) conforme instruções do Resend
+4. Aguarde verificação (~5 minutos)
+
+### Variáveis de email
+
+```bash
+RESEND_API_KEY=re_xxx                          # API key do Resend
+RESEND_FROM_EMAIL=noreply@empresa.com.br       # Email remetente (domínio verificado)
+```
+
+> **Nota:** O domínio do remetente deve estar verificado no Resend. Se não configurar domínio próprio, use `onboarding@resend.dev` para testes.
+
+### Funcionalidades de email
+
+O sistema envia emails automaticamente para:
+- **Recuperação de senha** — link com token válido por 15 minutos
+- **Boas-vindas** — ao criar conta (aguardando aprovação)
+- **Aprovação** — quando o admin aprova a conta do usuário
+
+---
+
+## Configurar Domínio e CORS
+
+### CORS
+
+Configure a variável `CORS_ORIGINS` com os domínios permitidos (separados por vírgula):
+
+```bash
+CORS_ORIGINS=https://app.clientenome.com.br
+```
+
+Se não definir `CORS_ORIGINS`, o sistema aceita requisições de qualquer origem (útil para desenvolvimento).
+
+### APP_URL
+
+Configure a URL base do sistema para os links nos emails:
+
+```bash
+APP_URL=https://app.clientenome.com.br
+```
+
+---
+
+## Tabelas do Supabase (adicionais)
+
+Além das tabelas `profiles`, `mentors` e `settings`, execute no SQL Editor:
+
+### Tabela `password_reset_tokens`
+
+```sql
+CREATE TABLE password_reset_tokens (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  token TEXT NOT NULL UNIQUE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_prt_token ON password_reset_tokens(token);
+```
+
+### Expandir `profiles` (se necessário)
+
+```sql
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+```
+
+---
+
 ## Referência Rápida de Variáveis
 
 | Variável | Obrigatória | Descrição |
@@ -495,4 +577,8 @@ git push origin main
 | `GEMINI_API_KEY` | Sim | Chave API do Google Gemini |
 | `SUPABASE_URL` | Sim | URL do projeto Supabase |
 | `SUPABASE_SERVICE_KEY` | Sim | Chave service_role do Supabase |
+| `RESEND_API_KEY` | Sim | API key do Resend para envio de emails |
+| `RESEND_FROM_EMAIL` | Sim | Email remetente (domínio verificado no Resend) |
+| `APP_URL` | Sim | URL base do sistema (para links em emails) |
+| `CORS_ORIGINS` | Não | Origens permitidas (vírgula-separadas). Vazio = todas |
 | `PORT` | Não | Porta do servidor (padrão: 3000) |

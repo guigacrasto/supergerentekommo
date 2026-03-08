@@ -72,6 +72,15 @@ export function LoginPage() {
           autoComplete="current-password"
         />
 
+        <div className="flex justify-end">
+          <Link
+            to="/forgot-password"
+            className="text-body-sm font-medium text-primary hover:underline"
+          >
+            Esqueceu a senha?
+          </Link>
+        </div>
+
         {error && (
           <div className="rounded-button bg-danger/10 px-3 py-2 text-body-sm text-danger">
             {error}

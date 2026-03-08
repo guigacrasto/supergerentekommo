@@ -19,6 +19,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   X,
+  User,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
@@ -234,6 +235,23 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
       {/* Footer */}
       <div className="border-t border-white/10 px-3 py-3 space-y-1">
+        <NavLink
+          to="/profile"
+          onClick={handleNavClick}
+          title={isCollapsed ? 'Perfil' : undefined}
+          className={({ isActive }) =>
+            cn(
+              'flex w-full items-center rounded-button px-3 py-2 text-body-md transition-colors cursor-pointer',
+              isCollapsed ? 'justify-center' : 'gap-3',
+              isActive
+                ? 'border-l-2 border-primary bg-primary/20 text-white'
+                : 'text-white/70 hover:bg-white/10 hover:text-white'
+            )
+          }
+        >
+          <User className="h-5 w-5 shrink-0" />
+          {!isCollapsed && 'Perfil'}
+        </NavLink>
         <button
           onClick={handleLogout}
           title={isCollapsed ? 'Sair' : undefined}

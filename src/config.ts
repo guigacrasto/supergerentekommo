@@ -45,6 +45,19 @@ export const kommoConfig = {
 
 export const PORT = parseInt(process.env.PORT || "3000", 10);
 
+// Email (Resend)
+export const emailConfig = {
+  apiKey: process.env.RESEND_API_KEY || "",
+  from: process.env.RESEND_FROM_EMAIL || "noreply@supergerente.com.br",
+  appUrl: process.env.APP_URL || "https://assistente.supergerente.com.br",
+};
+
+// CORS
+export const corsOrigins = (process.env.CORS_ORIGINS || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
 export function validateConfig() {
   if (!TEAMS.azul.subdomain) {
     console.error("Erro: KOMMO_SUBDOMAIN é obrigatório no .env");
