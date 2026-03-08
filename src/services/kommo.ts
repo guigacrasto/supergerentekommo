@@ -1,18 +1,24 @@
 import axios, { AxiosInstance } from "axios";
 import { KommoConfig, Lead, Message } from "../types/index.js";
 import qs from "qs";
-import { loadTokens, saveTokens } from "./token-store.js";
-import { TeamKey } from "../config.js";
+import { loadTokens, saveTokens, loadTokensFromTenant, saveTokensToTenant } from "./token-store.js";
+import { sendTokenAlertEmail } from "../api/services/email.js";
+
+// Cooldown de 6h para alertas de token por time
+const alertCooldowns = new Map<string, number>();
+const ALERT_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 
 export class KommoService {
     public client: AxiosInstance;
-    private config: KommoConfig;
+    public config: KommoConfig;
     private currentAccessToken: string;
-    private team: TeamKey;
+    public readonly team: string;
+    public readonly tenantId?: string;
 
-    constructor(config: KommoConfig, team: TeamKey) {
+    constructor(config: KommoConfig, team: string, tenantId?: string) {
         this.config = config;
         this.team = team;
+        this.tenantId = tenantId;
         this.currentAccessToken = config.accessToken ?? "";
         this.client = axios.create({
             baseURL: `https://${config.subdomain}.kommo.com/api/v4`,
@@ -50,7 +56,9 @@ export class KommoService {
     /** Called once on startup: loads the latest token from Supabase if available */
     public async loadStoredToken(): Promise<void> {
         try {
-            const stored = await loadTokens(this.team);
+            const stored = this.tenantId
+                ? await loadTokensFromTenant(this.tenantId)
+                : await loadTokens(this.team);
             if (stored?.accessToken && stored.accessToken !== this.currentAccessToken) {
                 console.log(`[KommoService:${this.team}] Using stored access token from Supabase`);
                 this.setAccessToken(stored.accessToken);
@@ -65,44 +73,69 @@ export class KommoService {
         this.client.defaults.headers.common["Authorization"] = `Bearer ${token}`;
     }
 
-    /** Exchange a refresh_token for a new access_token + refresh_token */
+    /** Exchange a refresh_token for a new access_token + refresh_token (with retry + backoff) */
     public async refreshAccessToken(): Promise<string> {
-        const stored = await loadTokens(this.team);
+        const stored = this.tenantId
+            ? await loadTokensFromTenant(this.tenantId)
+            : await loadTokens(this.team);
         if (!stored?.refreshToken) {
             throw new Error(`[${this.team}] No refresh token available. Please re-authorize via the admin panel.`);
         }
 
-        console.log(`[KommoService:${this.team}] Refreshing access token...`);
-        const response = await axios.post(
-            `https://${this.config.subdomain}.kommo.com/oauth2/access_token`,
-            {
-                client_id: this.config.clientId,
-                client_secret: this.config.clientSecret,
-                grant_type: "refresh_token",
-                refresh_token: stored.refreshToken,
-                redirect_uri: this.config.redirectUri,
-            }
-        );
+        const delays = [5_000, 15_000, 30_000]; // 5s, 15s, 30s backoff
+        let lastError: Error | null = null;
 
-        const { access_token, refresh_token, expires_in, server_time } = response.data;
-        const expiresAt = (server_time || Math.floor(Date.now() / 1000)) + (expires_in || 86400);
-        await saveTokens(this.team, { accessToken: access_token, refreshToken: refresh_token, expiresAt });
-        this.setAccessToken(access_token);
-        console.log(`[KommoService:${this.team}] Token refreshed and saved. Expires at ${new Date(expiresAt * 1000).toISOString()}`);
-        return access_token;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                console.log(`[KommoService:${this.team}] Refreshing access token (attempt ${attempt}/3)...`);
+                const response = await axios.post(
+                    `https://${this.config.subdomain}.kommo.com/oauth2/access_token`,
+                    {
+                        client_id: this.config.clientId,
+                        client_secret: this.config.clientSecret,
+                        grant_type: "refresh_token",
+                        refresh_token: stored.refreshToken,
+                        redirect_uri: this.config.redirectUri,
+                    }
+                );
+
+                const { access_token, refresh_token, expires_in, server_time } = response.data;
+                const expiresAt = (server_time || Math.floor(Date.now() / 1000)) + (expires_in || 86400);
+                if (this.tenantId) {
+                    await saveTokensToTenant(this.tenantId, { accessToken: access_token, refreshToken: refresh_token, expiresAt });
+                } else {
+                    await saveTokens(this.team, { accessToken: access_token, refreshToken: refresh_token, expiresAt });
+                }
+                this.setAccessToken(access_token);
+                console.log(`[KommoService:${this.team}] Token refreshed and saved. Expires at ${new Date(expiresAt * 1000).toISOString()}`);
+                return access_token;
+            } catch (e: any) {
+                lastError = e;
+                console.error(`[KommoService:${this.team}] Refresh attempt ${attempt}/3 failed:`, e.message);
+                if (attempt < 3) {
+                    const delay = delays[attempt - 1];
+                    console.log(`[KommoService:${this.team}] Retrying in ${delay / 1000}s...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+
+        throw lastError || new Error(`[${this.team}] Token refresh failed after 3 attempts`);
     }
 
-    /** Refresh the token proactively if it expires within 2 hours (or has no recorded expiry) */
+    /** Refresh the token proactively if it expires within 6 hours (or has no recorded expiry) */
     public async proactiveRefresh(): Promise<void> {
         try {
-            const stored = await loadTokens(this.team);
+            const stored = this.tenantId
+                ? await loadTokensFromTenant(this.tenantId)
+                : await loadTokens(this.team);
             if (!stored?.refreshToken) {
                 console.warn(`[KommoService:${this.team}] Proactive refresh skipped: no refresh token stored`);
                 return;
             }
             const now = Math.floor(Date.now() / 1000);
-            const twoHours = 2 * 60 * 60;
-            if (!stored.expiresAt || stored.expiresAt - now < twoHours) {
+            const sixHours = 6 * 60 * 60;
+            if (!stored.expiresAt || stored.expiresAt - now < sixHours) {
                 const hoursLeft = stored.expiresAt ? Math.round((stored.expiresAt - now) / 3600) : NaN;
                 console.log(`[KommoService:${this.team}] Proactive refresh triggered (${isNaN(hoursLeft) ? 'expiry unknown' : `${hoursLeft}h left`})`);
                 await this.refreshAccessToken();
@@ -112,6 +145,43 @@ export class KommoService {
             }
         } catch (e: any) {
             console.error(`[KommoService:${this.team}] Proactive refresh failed:`, e.message);
+            await this.sendRefreshFailureAlert(e.message);
+        }
+    }
+
+    /** Send email alert to tenant admins when token refresh fails (with 6h cooldown) */
+    private async sendRefreshFailureAlert(errorMessage: string): Promise<void> {
+        const cooldownKey = `${this.tenantId || "env"}:${this.team}`;
+        const lastAlert = alertCooldowns.get(cooldownKey) || 0;
+        if (Date.now() - lastAlert < ALERT_COOLDOWN_MS) {
+            console.log(`[KommoService:${this.team}] Alert cooldown active, skipping email`);
+            return;
+        }
+
+        try {
+            // Dynamically import supabase to avoid circular dependency
+            const { supabase } = await import("../api/supabase.js");
+            let adminEmails: string[] = [];
+
+            if (this.tenantId) {
+                const { data: admins } = await supabase
+                    .from("profiles")
+                    .select("email")
+                    .eq("tenant_id", this.tenantId)
+                    .in("role", ["admin", "superadmin"])
+                    .eq("status", "approved");
+                adminEmails = (admins || []).map((a: { email: string }) => a.email);
+            }
+
+            if (adminEmails.length > 0) {
+                await sendTokenAlertEmail(this.team, errorMessage, adminEmails);
+                alertCooldowns.set(cooldownKey, Date.now());
+                console.log(`[KommoService:${this.team}] Alert sent to ${adminEmails.length} admins`);
+            } else {
+                console.warn(`[KommoService:${this.team}] No admin emails found for alert`);
+            }
+        } catch (alertErr: any) {
+            console.error(`[KommoService:${this.team}] Failed to send alert email:`, alertErr.message);
         }
     }
 

@@ -1,11 +1,16 @@
 import { Router } from "express";
-import { KommoService } from "../../services/kommo.js";
-import { TeamKey, TEAMS } from "../../config.js";
 import { getCrmMetrics } from "../cache/crm-cache.js";
 import { requireAuth, AuthRequest } from "../middleware/requireAuth.js";
 import { supabase } from "../supabase.js";
+import { getVapidPublicKey } from "../services/push.js";
+import { getTeamConfigsFromTenant } from "../../config.js";
+import { KommoService } from "../../services/kommo.js";
 
-export function adminRouter(services: Record<TeamKey, KommoService>) {
+function isAdmin(req: AuthRequest): boolean {
+  return req.userRole === "admin" || req.userRole === "superadmin";
+}
+
+export function adminRouter() {
   const router = Router();
   router.use(requireAuth as any);
 
@@ -13,25 +18,22 @@ export function adminRouter(services: Record<TeamKey, KommoService>) {
   // F02 — Pipelines Pausadas
   // ──────────────────────────────────────────────
 
-  // GET /api/admin/pipelines — Lista todos os pipelines com status de pausa
   router.get("/pipelines", async (req: AuthRequest, res) => {
-    if (req.userRole !== "admin") {
+    if (!isAdmin(req)) {
       res.status(403).json({ error: "Acesso restrito a administradores." });
       return;
     }
 
     try {
-      // Buscar pipelines de todas as equipes configuradas via cache
-      const allPipelines: Array<{ id: number; name: string; team: TeamKey }> = [];
-
-      const configuredTeams = (Object.keys(TEAMS) as TeamKey[]).filter(
-        (k) => TEAMS[k].subdomain && services[k]
-      );
+      const allPipelines: Array<{ id: number; name: string; team: string }> = [];
+      const tenant = req.tenant!;
+      const teamConfigs = getTeamConfigsFromTenant(tenant);
 
       await Promise.all(
-        configuredTeams.map(async (team) => {
+        Object.entries(teamConfigs).map(async ([team, cfg]) => {
           try {
-            const metrics = await getCrmMetrics(team, services[team]);
+            const service = new KommoService(cfg, team, tenant.id);
+            const metrics = await getCrmMetrics(team, service, tenant.id, cfg.excludePipelineNames);
             for (const [idStr, name] of Object.entries(metrics.pipelineNames)) {
               allPipelines.push({ id: Number(idStr), name, team });
             }
@@ -41,12 +43,12 @@ export function adminRouter(services: Record<TeamKey, KommoService>) {
         })
       );
 
-      // Buscar lista de pipelines pausados no Supabase settings
       let pausedIds: number[] = [];
       const { data: setting } = await supabase
         .from("settings")
         .select("value")
         .eq("key", "paused_pipelines")
+        .eq("tenant_id", req.tenantId!)
         .single();
 
       if (setting?.value) {
@@ -73,9 +75,8 @@ export function adminRouter(services: Record<TeamKey, KommoService>) {
     }
   });
 
-  // POST /api/admin/pipelines/pause — Alterna status de pausa de um pipeline
   router.post("/pipelines/pause", async (req: AuthRequest, res) => {
-    if (req.userRole !== "admin") {
+    if (!isAdmin(req)) {
       res.status(403).json({ error: "Acesso restrito a administradores." });
       return;
     }
@@ -88,12 +89,12 @@ export function adminRouter(services: Record<TeamKey, KommoService>) {
     }
 
     try {
-      // Ler lista atual de pipelines pausados
       let pausedIds: number[] = [];
       const { data: setting } = await supabase
         .from("settings")
         .select("value")
         .eq("key", "paused_pipelines")
+        .eq("tenant_id", req.tenantId!)
         .single();
 
       if (setting?.value) {
@@ -104,7 +105,6 @@ export function adminRouter(services: Record<TeamKey, KommoService>) {
         }
       }
 
-      // Adicionar ou remover o pipeline
       if (paused) {
         if (!pausedIds.includes(pipelineId)) {
           pausedIds.push(pipelineId);
@@ -113,12 +113,11 @@ export function adminRouter(services: Record<TeamKey, KommoService>) {
         pausedIds = pausedIds.filter((id) => id !== pipelineId);
       }
 
-      // Salvar de volta no Supabase settings (upsert)
       const { error } = await supabase
         .from("settings")
         .upsert(
-          { key: "paused_pipelines", value: pausedIds },
-          { onConflict: "key" }
+          { key: "paused_pipelines", tenant_id: req.tenantId!, value: pausedIds },
+          { onConflict: "tenant_id,key" }
         );
 
       if (error) {
@@ -139,23 +138,22 @@ export function adminRouter(services: Record<TeamKey, KommoService>) {
   // F08 — Gestao de Funis por Usuario
   // ──────────────────────────────────────────────
 
-  // GET /api/admin/groups — Lista grupos Kommo disponiveis por time
   router.get("/groups", async (req: AuthRequest, res) => {
-    if (req.userRole !== "admin") {
+    if (!isAdmin(req)) {
       res.status(403).json({ error: "Acesso restrito a administradores." });
       return;
     }
 
     try {
-      const configuredTeams = (Object.keys(TEAMS) as TeamKey[]).filter(
-        (k) => TEAMS[k].subdomain && services[k]
-      );
+      const tenant = req.tenant!;
+      const teamConfigs = getTeamConfigsFromTenant(tenant);
 
       const gruposByTeam: Record<string, string[]> = {};
       await Promise.all(
-        configuredTeams.map(async (team) => {
+        Object.entries(teamConfigs).map(async ([team, cfg]) => {
           try {
-            const metrics = await getCrmMetrics(team, services[team]);
+            const service = new KommoService(cfg, team, tenant.id);
+            const metrics = await getCrmMetrics(team, service, tenant.id, cfg.excludePipelineNames);
             const gruposSet = new Set(Object.values(metrics.userGroups));
             gruposByTeam[team] = Array.from(gruposSet).sort();
           } catch (err: any) {
@@ -172,30 +170,29 @@ export function adminRouter(services: Record<TeamKey, KommoService>) {
     }
   });
 
-  // GET /api/admin/users — Lista usuarios com permissoes de funil e grupo
   router.get("/users", async (req: AuthRequest, res) => {
-    if (req.userRole !== "admin") {
+    if (!isAdmin(req)) {
       res.status(403).json({ error: "Acesso restrito a administradores." });
       return;
     }
 
     try {
-      // Buscar perfis
       const { data: profiles, error: profilesError } = await supabase
         .from("profiles")
-        .select("id, email, name, role, status, teams");
+        .select("id, email, name, role, status, teams")
+        .eq("tenant_id", req.tenantId!);
 
       if (profilesError) {
         res.status(500).json({ error: profilesError.message });
         return;
       }
 
-      // Buscar permissoes de funil (tabela pode nao existir ainda)
       let permissionsMap: Record<string, number[]> = {};
       try {
         const { data: permissions, error: permError } = await supabase
           .from("user_funnel_permissions")
-          .select("user_id, allowed_funnels");
+          .select("user_id, allowed_funnels")
+          .eq("tenant_id", req.tenantId!);
 
         if (!permError && permissions) {
           for (const perm of permissions) {
@@ -203,15 +200,15 @@ export function adminRouter(services: Record<TeamKey, KommoService>) {
           }
         }
       } catch {
-        console.warn("[Admin] Tabela user_funnel_permissions nao encontrada, retornando vazio.");
+        console.warn("[Admin] Tabela user_funnel_permissions nao encontrada.");
       }
 
-      // Buscar permissoes de grupo (settings table: user_groups:{userId})
       const groupPermMap: Record<string, Record<string, string[]>> = {};
       try {
         const { data: groupSettings } = await supabase
           .from("settings")
           .select("key, value")
+          .eq("tenant_id", req.tenantId!)
           .like("key", "user_groups:%");
 
         if (groupSettings) {
@@ -243,9 +240,8 @@ export function adminRouter(services: Record<TeamKey, KommoService>) {
     }
   });
 
-  // PATCH /api/admin/users/:id/funnels — Atualiza funis permitidos de um usuario
   router.patch("/users/:id/funnels", async (req: AuthRequest, res) => {
-    if (req.userRole !== "admin") {
+    if (!isAdmin(req)) {
       res.status(403).json({ error: "Acesso restrito a administradores." });
       return;
     }
@@ -259,12 +255,12 @@ export function adminRouter(services: Record<TeamKey, KommoService>) {
     }
 
     try {
-      // Upsert na tabela user_funnel_permissions
       const { error } = await supabase
         .from("user_funnel_permissions")
         .upsert(
           {
             user_id: userId,
+            tenant_id: req.tenantId!,
             team,
             allowed_funnels,
             updated_at: new Date().toISOString(),
@@ -278,11 +274,6 @@ export function adminRouter(services: Record<TeamKey, KommoService>) {
         return;
       }
 
-      // NOTA: O cache de auth e in-memory (authCache no requireAuth.ts).
-      // Idealmente limpariamos a entrada do usuario aqui, mas o cache
-      // expira em 5 minutos automaticamente. Para efeito imediato,
-      // o usuario precisaria fazer logout/login.
-
       console.log(`[Admin] Funis do usuario ${userId} (equipe ${team}) atualizados: [${allowed_funnels.join(", ")}]`);
       res.json({ ok: true });
     } catch (error: any) {
@@ -291,9 +282,8 @@ export function adminRouter(services: Record<TeamKey, KommoService>) {
     }
   });
 
-  // PATCH /api/admin/users/:id/groups — Atualiza grupos permitidos de um usuario
   router.patch("/users/:id/groups", async (req: AuthRequest, res) => {
-    if (req.userRole !== "admin") {
+    if (!isAdmin(req)) {
       res.status(403).json({ error: "Acesso restrito a administradores." });
       return;
     }
@@ -307,12 +297,12 @@ export function adminRouter(services: Record<TeamKey, KommoService>) {
     }
 
     try {
-      // Ler valor atual de grupos do usuario
       const settingsKey = `user_groups:${userId}`;
       const { data: existing } = await supabase
         .from("settings")
         .select("value")
         .eq("key", settingsKey)
+        .eq("tenant_id", req.tenantId!)
         .single();
 
       let current: Record<string, string[]> = {};
@@ -320,14 +310,13 @@ export function adminRouter(services: Record<TeamKey, KommoService>) {
         current = typeof existing.value === "string" ? JSON.parse(existing.value) : existing.value;
       }
 
-      // Atualizar apenas o time especificado
       current[team] = allowed_groups;
 
       const { error } = await supabase
         .from("settings")
         .upsert(
-          { key: settingsKey, value: current, updated_at: new Date().toISOString() },
-          { onConflict: "key" }
+          { key: settingsKey, tenant_id: req.tenantId!, value: current, updated_at: new Date().toISOString() },
+          { onConflict: "tenant_id,key" }
         );
 
       if (error) {
@@ -344,9 +333,8 @@ export function adminRouter(services: Record<TeamKey, KommoService>) {
     }
   });
 
-  // PATCH /api/admin/users/:id/teams — Atualiza equipes de um usuario
   router.patch("/users/:id/teams", async (req: AuthRequest, res) => {
-    if (req.userRole !== "admin") {
+    if (!isAdmin(req)) {
       res.status(403).json({ error: "Acesso restrito a administradores." });
       return;
     }
@@ -359,15 +347,12 @@ export function adminRouter(services: Record<TeamKey, KommoService>) {
       return;
     }
 
-    // Validate team values
-    const validTeams = (Object.keys(TEAMS) as TeamKey[]).filter((k) => TEAMS[k].subdomain);
-    const filtered = teams.filter((t: string) => validTeams.includes(t as TeamKey));
-
     try {
       const { error } = await supabase
         .from("profiles")
-        .update({ teams: filtered })
-        .eq("id", userId);
+        .update({ teams })
+        .eq("id", userId)
+        .eq("tenant_id", req.tenantId!);
 
       if (error) {
         console.error("[Admin] Erro ao atualizar equipes:", error.message);
@@ -375,10 +360,182 @@ export function adminRouter(services: Record<TeamKey, KommoService>) {
         return;
       }
 
-      console.log(`[Admin] Equipes do usuario ${userId} atualizadas: [${filtered.join(", ")}]`);
+      console.log(`[Admin] Equipes do usuario ${userId} atualizadas: [${teams.join(", ")}]`);
       res.json({ ok: true });
     } catch (error: any) {
       console.error("[Admin] Erro ao atualizar equipes:", error.message);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ──────────────────────────────────────────────
+  // Audit Logs
+  // ──────────────────────────────────────────────
+
+  router.get("/audit-logs", async (req: AuthRequest, res) => {
+    if (!isAdmin(req)) {
+      res.status(403).json({ error: "Acesso restrito a administradores." });
+      return;
+    }
+
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+      const offset = (page - 1) * limit;
+
+      let query = supabase
+        .from("audit_logs")
+        .select("*", { count: "exact" })
+        .eq("tenant_id", req.tenantId!)
+        .order("created_at", { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (req.query.userId) {
+        query = query.eq("user_id", req.query.userId);
+      }
+      if (req.query.action) {
+        query = query.eq("action", req.query.action);
+      }
+      if (req.query.from) {
+        query = query.gte("created_at", req.query.from);
+      }
+      if (req.query.to) {
+        query = query.lte("created_at", req.query.to);
+      }
+
+      const { data, count, error } = await query;
+
+      if (error) {
+        res.status(500).json({ error: error.message });
+        return;
+      }
+
+      res.json({ logs: data || [], total: count || 0, page, limit });
+    } catch (error: any) {
+      console.error("[Admin] Erro ao buscar audit logs:", error.message);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ──────────────────────────────────────────────
+  // Webhook Config (Hot Lead Statuses)
+  // ──────────────────────────────────────────────
+
+  router.get("/webhook-config", async (req: AuthRequest, res) => {
+    if (!isAdmin(req)) {
+      res.status(403).json({ error: "Acesso restrito a administradores." });
+      return;
+    }
+
+    try {
+      const { data } = await supabase
+        .from("settings")
+        .select("value")
+        .eq("key", "hot_lead_statuses")
+        .eq("tenant_id", req.tenantId!)
+        .single();
+
+      const hotStatuses: number[] = data?.value
+        ? (Array.isArray(data.value) ? data.value : JSON.parse(data.value))
+        : [];
+
+      res.json({ hotStatuses, vapidPublicKey: getVapidPublicKey() });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.post("/webhook-config", async (req: AuthRequest, res) => {
+    if (!isAdmin(req)) {
+      res.status(403).json({ error: "Acesso restrito a administradores." });
+      return;
+    }
+
+    const { hotStatuses } = req.body;
+    if (!Array.isArray(hotStatuses)) {
+      res.status(400).json({ error: "hotStatuses deve ser um array de números." });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("settings")
+        .upsert(
+          { key: "hot_lead_statuses", tenant_id: req.tenantId!, value: hotStatuses },
+          { onConflict: "tenant_id,key" }
+        );
+
+      if (error) {
+        res.status(500).json({ error: error.message });
+        return;
+      }
+
+      res.json({ ok: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ──────────────────────────────────────────────
+  // Kommo Re-Authorization (1-click token renewal)
+  // ──────────────────────────────────────────────
+
+  router.get("/kommo-auth-url", async (req: AuthRequest, res) => {
+    if (!isAdmin(req)) {
+      res.status(403).json({ error: "Acesso restrito a administradores." });
+      return;
+    }
+
+    const team = (req.query.team as string) || "azul";
+
+    try {
+      const tenant = req.tenant!;
+      const teamConfigs = getTeamConfigsFromTenant(tenant);
+      const cfg = teamConfigs[team];
+
+      if (!cfg || !cfg.subdomain || !cfg.clientId) {
+        res.status(404).json({ error: `Configuracao do time '${team}' nao encontrada.` });
+        return;
+      }
+
+      const authUrl = `https://${cfg.subdomain}.kommo.com/oauth?client_id=${cfg.clientId}&mode=popup`;
+      res.json({ authUrl, team });
+    } catch (error: any) {
+      console.error("[Admin] Erro ao gerar URL de auth Kommo:", error.message);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.post("/kommo-auth-code", async (req: AuthRequest, res) => {
+    if (!isAdmin(req)) {
+      res.status(403).json({ error: "Acesso restrito a administradores." });
+      return;
+    }
+
+    const { team, code } = req.body;
+
+    if (!team || !code) {
+      res.status(400).json({ error: "Body deve conter team (string) e code (string)." });
+      return;
+    }
+
+    try {
+      const tenant = req.tenant!;
+      const teamConfigs = getTeamConfigsFromTenant(tenant);
+      const cfg = teamConfigs[team];
+
+      if (!cfg || !cfg.subdomain) {
+        res.status(404).json({ error: `Configuracao do time '${team}' nao encontrada.` });
+        return;
+      }
+
+      const service = new KommoService(cfg, team, tenant.id);
+      await service.exchangeAuthCode(code);
+
+      console.log(`[Admin] Token Kommo do time ${team} re-autorizado com sucesso`);
+      res.json({ ok: true, message: `Token do time ${team} renovado com sucesso.` });
+    } catch (error: any) {
+      console.error("[Admin] Erro ao trocar auth code Kommo:", error.message);
       res.status(500).json({ error: error.message });
     }
   });

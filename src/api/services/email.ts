@@ -46,6 +46,59 @@ export async function sendWelcomeEmail(to: string, userName: string) {
   });
 }
 
+export async function sendEmail(opts: { to: string; subject: string; html: string }) {
+  await resend.emails.send({
+    from: `${appName} <${from}>`,
+    to: opts.to,
+    subject: opts.subject,
+    html: opts.html,
+  });
+}
+
+export async function sendTokenAlertEmail(
+  team: string,
+  errorMessage: string,
+  adminEmails: string[]
+) {
+  if (adminEmails.length === 0) return;
+
+  const html = `<div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px;">
+    <h2 style="color: #EF4444; margin-bottom: 16px;">⚠️ Token Kommo Expirado</h2>
+    <p style="color: #333; line-height: 1.6;">O token de acesso do Kommo para o time <strong>${team}</strong> nao conseguiu renovar automaticamente apos 3 tentativas.</p>
+    <p style="color: #333; line-height: 1.6;"><strong>Erro:</strong> ${errorMessage}</p>
+    <p style="color: #333; line-height: 1.6;">Acesse o painel de administracao para re-autorizar a integracao com o Kommo:</p>
+    <div style="text-align: center; margin: 24px 0;">
+      <a href="${appUrl}/admin" style="display: inline-block; padding: 12px 32px; background-color: #EF4444; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600;">Re-autorizar Kommo</a>
+    </div>
+    <p style="color: #666; font-size: 13px;">Este alerta nao sera enviado novamente nas proximas 6 horas.</p>
+    <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
+    <p style="color: #999; font-size: 12px;">Equipe ${appName} — Sistema de Monitoramento</p>
+  </div>`;
+
+  // Sempre incluir o email do Gui como destinatário fixo
+  const allRecipients = new Set(adminEmails);
+  allRecipients.add("guilherme@onigroup.com.br");
+
+  for (const email of allRecipients) {
+    try {
+      await resend.emails.send({
+        from: `${appName} Alerta <${from}>`,
+        to: email,
+        subject: `[URGENTE] Token Kommo expirado — time ${team}`,
+        html,
+        headers: {
+          "X-Priority": "1",
+          "X-MSMail-Priority": "High",
+          "Importance": "high",
+        },
+      });
+      console.log(`[TokenAlert] Email enviado para ${email}`);
+    } catch (e: any) {
+      console.error(`[TokenAlert] Falha ao enviar email para ${email}:`, e.message);
+    }
+  }
+}
+
 export async function sendApprovalEmail(to: string, userName: string) {
   await resend.emails.send({
     from: `${appName} <${from}>`,
