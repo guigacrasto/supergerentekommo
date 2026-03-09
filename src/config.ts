@@ -56,8 +56,8 @@ export const totpConfig = {
 // Email (Resend)
 export const emailConfig = {
   apiKey: process.env.RESEND_API_KEY || "",
-  from: process.env.RESEND_FROM_EMAIL || "noreply@supergerente.com.br",
-  appUrl: process.env.APP_URL || "https://assistente.supergerente.com.br",
+  from: process.env.RESEND_FROM_EMAIL || "noreply@supergerente.com",
+  appUrl: process.env.APP_URL || "https://supergerente.com",
 };
 
 // CORS
