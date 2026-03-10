@@ -135,6 +135,69 @@ function countWonPeriod(leads: any[], days: number): number {
   return leads.filter((l) => l.status_id === STATUS.WON && l.closed_at >= cutoff).length;
 }
 
+/**
+ * Determina o dia útil de um timestamp (fechamento).
+ * Regras:
+ * - Fechamento antes das 17h BRT → mesmo dia
+ * - Fechamento após 17h BRT → próximo dia útil
+ * - Domingo inteiro → segunda
+ * - Sábado após 17h → segunda
+ * Retorna "YYYY-MM-DD"
+ */
+function getBusinessDayForTs(tsSeconds: number): string {
+  const date = new Date(tsSeconds * 1000);
+  const brt = new Date(date.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+
+  const dow = brt.getDay(); // 0=Dom, 6=Sab
+  const hour = brt.getHours();
+
+  if (dow === 0) {
+    // Domingo → segunda
+    brt.setDate(brt.getDate() + 1);
+  } else if (hour >= 17) {
+    if (dow === 6) {
+      // Sábado após 17h → segunda (+2)
+      brt.setDate(brt.getDate() + 2);
+    } else {
+      // Seg-Sex após 17h → dia seguinte
+      brt.setDate(brt.getDate() + 1);
+    }
+  }
+
+  const y = brt.getFullYear();
+  const m = String(brt.getMonth() + 1).padStart(2, '0');
+  const d = String(brt.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/**
+ * Retorna o dia útil atual em BRT.
+ * Domingo → mostra dados de segunda.
+ */
+function getCurrentBusinessDay(): string {
+  const now = new Date();
+  const brt = new Date(now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+
+  if (brt.getDay() === 0) {
+    brt.setDate(brt.getDate() + 1);
+  }
+
+  const y = brt.getFullYear();
+  const m = String(brt.getMonth() + 1).padStart(2, '0');
+  const d = String(brt.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/**
+ * Conta vendas ganhas (status WON) cujo fechamento pertence ao dia útil atual.
+ */
+function countWonBusinessDay(leads: any[]): number {
+  const today = getCurrentBusinessDay();
+  return leads.filter(
+    (l) => l.status_id === STATUS.WON && l.closed_at > 0 && getBusinessDayForTs(l.closed_at) === today
+  ).length;
+}
+
 function getBrtMonthStart(): number {
   const now = new Date();
   const brt = new Date(now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
@@ -228,7 +291,7 @@ async function fetchAndCompute(
         team,
         total: mine.length,
         ganhos,
-        ganhosHoje: countWonPeriod(mine, 1),
+        ganhosHoje: countWonBusinessDay(mine),
         ganhosSemana: countWonPeriod(mine, 7),
         perdidos,
         ativos: mine.length - ganhos - perdidos,
