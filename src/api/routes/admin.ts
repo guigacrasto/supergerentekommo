@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getCrmMetrics } from "../cache/crm-cache.js";
+import { getCrmMetrics, invalidateAllCaches } from "../cache/crm-cache.js";
 import { requireAuth, AuthRequest } from "../middleware/requireAuth.js";
 import { supabase } from "../supabase.js";
 import { getVapidPublicKey } from "../services/push.js";
@@ -13,6 +13,16 @@ function isAdmin(req: AuthRequest): boolean {
 export function adminRouter() {
   const router = Router();
   router.use(requireAuth as any);
+
+  // POST /api/admin/cache-refresh — force refresh all CRM caches
+  router.post("/cache-refresh", async (req: AuthRequest, res) => {
+    if (!isAdmin(req)) {
+      res.status(403).json({ error: "Acesso restrito a administradores." });
+      return;
+    }
+    invalidateAllCaches();
+    res.json({ ok: true, message: "Cache invalidado. Proximo request vai buscar dados frescos." });
+  });
 
   // ──────────────────────────────────────────────
   // F02 — Pipelines Pausadas

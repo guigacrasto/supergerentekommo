@@ -102,6 +102,13 @@ function getOrCreateEntry(key: string): CacheEntry {
   return entry;
 }
 
+export function invalidateAllCaches(): void {
+  for (const [key, entry] of caches) {
+    entry.expiresAt = 0;
+    console.log(`[CrmCache:${key}] Cache invalidado`);
+  }
+}
+
 function toConversao(ganhos: number, total: number): string {
   if (total === 0) return "0.0%";
   return ((ganhos / total) * 100).toFixed(1) + "%";
