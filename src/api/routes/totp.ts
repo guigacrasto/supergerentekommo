@@ -129,7 +129,7 @@ export function totpRouter(): Router {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("totp_secret_encrypted, totp_backup_codes, totp_enabled, name, email, role, teams, tenant_id")
+      .select("totp_secret_encrypted, totp_backup_codes, totp_enabled, name, email, role, teams")
       .eq("id", challenge.userId)
       .single();
 
@@ -178,25 +178,6 @@ export function totpRouter(): Router {
       email: profile.email,
     });
 
-    // Fallback: criar sessao diretamente usando o token do challenge
-    // Como o user ja provou a senha + 2FA, podemos confiar
-    // Buscar tenant info
-    let tenantInfo = null;
-    if (profile.tenant_id) {
-      const { getTenantById } = await import("../services/tenant.js");
-      const tenant = await getTenantById(profile.tenant_id);
-      if (tenant) {
-        tenantInfo = {
-          id: tenant.id,
-          name: tenant.name,
-          slug: tenant.slug,
-          logoUrl: tenant.logoUrl,
-          primaryColor: tenant.primaryColor,
-          isActive: tenant.isActive,
-        };
-      }
-    }
-
     // Gerar token via admin createUser session workaround
     // Na verdade, a melhor approach e gerar um novo signIn
     // Mas como ja validamos senha+2FA, usamos admin.generateLink + extraimos o token
@@ -238,8 +219,8 @@ export function totpRouter(): Router {
         name: profile.name,
         role: profile.role,
         teams: profile.teams || [],
-        tenantId: profile.tenant_id,
-        tenant: tenantInfo,
+        tenantId: null,
+        tenant: null,
       },
       ...(isBackupCode ? { warning: "Backup code usado. Restam " + ((profile.totp_backup_codes?.length || 1) - 1) + " codigos." } : {}),
     });
