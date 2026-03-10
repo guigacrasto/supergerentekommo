@@ -35,7 +35,6 @@ function resolveAction(method: string, path: string): string {
 function logAsync(
   userId: string | undefined,
   userEmail: string | undefined,
-  tenantId: string | undefined,
   action: string,
   resource: string,
   method: string,
@@ -47,7 +46,6 @@ function logAsync(
     .insert({
       user_id: userId || null,
       user_email: userEmail || null,
-      tenant_id: tenantId || null,
       action,
       resource,
       method,
@@ -93,7 +91,7 @@ export function auditLog(req: AuthRequest, res: Response, next: NextFunction): v
     if (Object.keys(safeBody).length > 0) details.body = safeBody;
   }
 
-  logAsync(req.userId, undefined, req.tenantId, action, path, method, details, ip);
+  logAsync(req.userId, undefined, action, path, method, details, ip);
   next();
 }
 

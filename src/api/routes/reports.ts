@@ -86,9 +86,7 @@ export function reportsRouter() {
   }
 
   async function getFilteredMetrics(req: AuthRequest) {
-    const tenant = req.tenant!;
-    const tenantId = req.tenantId!;
-    const teamConfigs = getTeamConfigsFromTenant(tenant);
+    const teamConfigs = getTeamConfigsFromTenant(req.tenant);
     const userTeams = req.userTeams || [];
     const { tags, tagMode } = parseTagsFromQuery(req.query);
     const allowedFunnels = req.allowedFunnels || { azul: [], amarela: [] };
@@ -98,8 +96,8 @@ export function reportsRouter() {
     const results = await Promise.all(
       userTeams.filter((t) => !!teamConfigs[t] && teamConfigs[t].subdomain).map(async (team) => {
         const cfg = teamConfigs[team];
-        const kommoService = new KommoService(cfg, team, tenantId);
-        const raw = await getCrmMetrics(team, kommoService, tenantId, cfg.excludePipelineNames);
+        const kommoService = new KommoService(cfg, team);
+        const raw = await getCrmMetrics(team, kommoService, undefined, cfg.excludePipelineNames);
         const filtered = filterCrmMetrics(raw, {
           tags,
           tagMode,
@@ -239,9 +237,7 @@ export function reportsRouter() {
 
   // GET /api/reports/activity — leads sem atividade e tarefas vencidas por equipe
   router.get("/activity", async (req: AuthRequest, res) => {
-    const tenant = req.tenant!;
-    const tenantId = req.tenantId!;
-    const teamConfigs = getTeamConfigsFromTenant(tenant);
+    const teamConfigs = getTeamConfigsFromTenant(req.tenant);
     const userTeams = req.userTeams || [];
     const { tags, tagMode } = parseTagsFromQuery(req.query);
     const allowedFunnels = req.allowedFunnels || { azul: [], amarela: [] };
@@ -259,8 +255,8 @@ export function reportsRouter() {
         userTeams.filter((t) => !!teamConfigs[t] && teamConfigs[t].subdomain).map(async (team) => {
           try {
             const cfg = teamConfigs[team];
-            const kommoService = new KommoService(cfg, team, tenantId);
-            const raw = await getCrmMetrics(team, kommoService, tenantId, cfg.excludePipelineNames);
+            const kommoService = new KommoService(cfg, team);
+            const raw = await getCrmMetrics(team, kommoService, undefined, cfg.excludePipelineNames);
             const filtered = filterCrmMetrics(raw, {
               tags, tagMode,
               allowedFunnels: allowedFunnels[team] || [],
@@ -1005,9 +1001,7 @@ export function reportsRouter() {
 
   // GET /api/reports/all — combined endpoint (summary + dashboard + activity in 1 request)
   router.get("/all", async (req: AuthRequest, res) => {
-    const tenant = req.tenant!;
-    const tenantId = req.tenantId!;
-    const teamConfigs = getTeamConfigsFromTenant(tenant);
+    const teamConfigs = getTeamConfigsFromTenant(req.tenant);
     const userTeams = req.userTeams || [];
     const { tags, tagMode } = parseTagsFromQuery(req.query);
     const allowedFunnels = req.allowedFunnels || { azul: [], amarela: [] };
@@ -1018,8 +1012,8 @@ export function reportsRouter() {
       const teamsData = await Promise.all(
         userTeams.filter((t) => !!teamConfigs[t] && teamConfigs[t].subdomain).map(async (team) => {
           const cfg = teamConfigs[team];
-          const kommoService = new KommoService(cfg, team, tenantId);
-          const raw = await getCrmMetrics(team, kommoService, tenantId, cfg.excludePipelineNames);
+          const kommoService = new KommoService(cfg, team);
+          const raw = await getCrmMetrics(team, kommoService, undefined, cfg.excludePipelineNames);
           const metrics = filterCrmMetrics(raw, {
             tags, tagMode,
             allowedFunnels: allowedFunnels[team] || [],
@@ -1108,9 +1102,7 @@ export function reportsRouter() {
 
   // GET /api/reports/stream — SSE stream for real-time updates (full dashboard data)
   router.get("/stream", async (req: AuthRequest, res) => {
-    const tenant = req.tenant!;
-    const tenantId = req.tenantId!;
-    const teamConfigs = getTeamConfigsFromTenant(tenant);
+    const teamConfigs = getTeamConfigsFromTenant(req.tenant);
     const userTeams = req.userTeams || [];
     const allowedFunnels = req.allowedFunnels || { azul: [], amarela: [] };
     const pausedPipelines = req.pausedPipelines || [];
@@ -1126,8 +1118,8 @@ export function reportsRouter() {
         const teamsData = await Promise.all(
           userTeams.filter((t) => !!teamConfigs[t] && teamConfigs[t].subdomain).map(async (team) => {
             const cfg = teamConfigs[team];
-            const kommoService = new KommoService(cfg, team, tenantId);
-            const raw = await getCrmMetrics(team, kommoService, tenantId, cfg.excludePipelineNames);
+            const kommoService = new KommoService(cfg, team);
+            const raw = await getCrmMetrics(team, kommoService, undefined, cfg.excludePipelineNames);
             const metrics = filterCrmMetrics(raw, {
               tags: [],
               tagMode: "or",
@@ -1213,9 +1205,7 @@ export function reportsRouter() {
   // GET /api/reports/predictions — Previsão de fechamento por lead
   router.get("/predictions", async (req: AuthRequest, res) => {
     try {
-      const tenant = req.tenant!;
-      const tenantId = req.tenantId!;
-      const teamConfigs = getTeamConfigsFromTenant(tenant);
+      const teamConfigs = getTeamConfigsFromTenant(req.tenant);
       const teams = req.userTeams || [];
       const teamFilter = typeof req.query.team === "string" ? req.query.team : teams[0];
       const funilFilter = typeof req.query.funil === "string" ? req.query.funil : undefined;
@@ -1227,8 +1217,8 @@ export function reportsRouter() {
         return;
       }
 
-      const kommoService = new KommoService(cfg, teamFilter, tenantId);
-      const metrics = await getCrmMetrics(teamFilter, kommoService, tenantId, cfg.excludePipelineNames);
+      const kommoService = new KommoService(cfg, teamFilter);
+      const metrics = await getCrmMetrics(teamFilter, kommoService, undefined, cfg.excludePipelineNames);
       let predictions = calculatePredictions(metrics, teamFilter);
 
       // Apply filters

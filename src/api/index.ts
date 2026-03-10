@@ -1,12 +1,11 @@
-import { TEAMS, validateConfig, PORT, getTeamConfigsFromTenant } from "../config.js";
+import { TEAMS, validateConfig, PORT } from "../config.js";
 import { KommoService } from "../services/kommo.js";
 import { createServer } from "./server.js";
 import { getCrmMetrics, startProactiveRefresh } from "./cache/crm-cache.js";
 import { markCacheReady, setTokenStatuses, TokenStatusEntry } from "./readiness.js";
 import { startAuditCleanup } from "./middleware/auditLog.js";
-import { loadTenants, getAllTenants } from "./services/tenant.js";
 import { cleanupExpiredChallenges } from "./services/totp.js";
-import { loadTokens, loadTokensFromTenant } from "../services/token-store.js";
+import { loadTokens } from "../services/token-store.js";
 
 validateConfig();
 
@@ -23,9 +22,7 @@ async function updateTokenStatuses() {
 
   for (const { service, label } of allServices) {
     try {
-      const stored = service.tenantId
-        ? await loadTokensFromTenant(service.tenantId)
-        : await loadTokens(service.team);
+      const stored = await loadTokens(service.team);
 
       if (!stored?.accessToken) {
         statuses.push({ label, status: "unknown" });
@@ -67,47 +64,19 @@ async function refreshAllTokens() {
 app.listen(PORT, async () => {
   console.log(`Web server rodando em http://localhost:${PORT}`);
 
-  // Load tenants from database
-  await loadTenants();
-  let tenants: Awaited<ReturnType<typeof getAllTenants>> = [];
-  try {
-    tenants = await getAllTenants();
-  } catch (e: any) {
-    console.warn(`[Startup] Erro ao carregar tenants (fallback para env vars):`, e.message);
+  // Initialize KommoService from env vars
+  console.log("[Startup] Inicializando equipes via env vars");
+  if (TEAMS.azul.subdomain) {
+    const azul = new KommoService(TEAMS.azul, "azul");
+    await azul.loadStoredToken();
+    allServices.push({ service: azul, label: "env:azul" });
+    startProactiveRefresh("azul", azul);
   }
-  const activeTenants = tenants.filter(t => t.isActive);
-
-  if (activeTenants.length > 0) {
-    console.log(`[Startup] ${activeTenants.length} tenants ativos encontrados`);
-
-    // Initialize KommoService for each tenant's teams
-    for (const tenant of activeTenants) {
-      const teamConfigs = getTeamConfigsFromTenant(tenant);
-      for (const [teamKey, cfg] of Object.entries(teamConfigs)) {
-        if (!cfg.subdomain) continue;
-        const service = new KommoService(cfg, teamKey, tenant.id);
-        await service.loadStoredToken();
-        allServices.push({ service, label: `${tenant.slug}:${teamKey}` });
-
-        // Register for proactive cache refresh
-        startProactiveRefresh(teamKey, service, tenant.id, cfg.excludePipelineNames);
-      }
-    }
-  } else {
-    // Fallback: use env vars (backward compat for migration period)
-    console.log("[Startup] Nenhum tenant ativo — usando env vars (fallback)");
-    if (TEAMS.azul.subdomain) {
-      const azul = new KommoService(TEAMS.azul, "azul");
-      await azul.loadStoredToken();
-      allServices.push({ service: azul, label: "env:azul" });
-      startProactiveRefresh("azul", azul);
-    }
-    if (TEAMS.amarela.subdomain) {
-      const amarela = new KommoService(TEAMS.amarela, "amarela");
-      await amarela.loadStoredToken();
-      allServices.push({ service: amarela, label: "env:amarela" });
-      startProactiveRefresh("amarela", amarela);
-    }
+  if (TEAMS.amarela.subdomain) {
+    const amarela = new KommoService(TEAMS.amarela, "amarela");
+    await amarela.loadStoredToken();
+    allServices.push({ service: amarela, label: "env:amarela" });
+    startProactiveRefresh("amarela", amarela);
   }
 
   // Refresh tokens proactively on startup
@@ -120,7 +89,6 @@ app.listen(PORT, async () => {
     const warmups: Promise<unknown>[] = [];
     for (const { service, label } of allServices) {
       const [, team] = label.split(":");
-      const tenantId = label.includes(":") ? undefined : undefined; // handled inside getCrmMetrics
       warmups.push(
         getCrmMetrics(team || label, service).catch(e => {
           console.error(`[WarmUp] Erro no cache de ${label}:`, e.message);

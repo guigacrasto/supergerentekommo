@@ -10,10 +10,8 @@ export function pipelinesRouter() {
   // GET /api/pipelines — pipelines from all authorized teams
   router.get("/", async (req, res) => {
     const authReq = req as AuthRequest;
-    const tenant = authReq.tenant!;
-    const tenantId = authReq.tenantId!;
     const userTeams = authReq.userTeams || [];
-    const teamConfigs = getTeamConfigsFromTenant(tenant);
+    const teamConfigs = getTeamConfigsFromTenant(authReq.tenant);
 
     try {
       const results: Array<{ id: number; name: string; team: string }> = [];
@@ -24,7 +22,7 @@ export function pipelinesRouter() {
           .map(async (team) => {
             try {
               const cfg = teamConfigs[team];
-              const kommoService = new KommoService(cfg, team, tenantId);
+              const kommoService = new KommoService(cfg, team);
               const excludeNames = cfg.excludePipelineNames;
               const pipelines = await kommoService.getPipelines();
               return pipelines

@@ -143,10 +143,8 @@ export function chatRouter() {
     }
 
     try {
-      // Build KommoService instances from tenant config
-      const tenant = authReq.tenant!;
-      const tenantId = authReq.tenantId!;
-      const teamConfigs = getTeamConfigsFromTenant(tenant);
+      // Build KommoService instances from config
+      const teamConfigs = getTeamConfigsFromTenant(authReq.tenant);
       const userTeams = authReq.userTeams || [];
 
       const metricsPerTeam = await Promise.all(
@@ -154,8 +152,8 @@ export function chatRouter() {
           .filter((t) => !!teamConfigs[t] && teamConfigs[t].subdomain)
           .map(async (t) => {
             const cfg = teamConfigs[t];
-            const kommoService = new KommoService(cfg, t, tenantId);
-            const crmMetrics = await getCrmMetrics(t, kommoService, tenantId, cfg.excludePipelineNames);
+            const kommoService = new KommoService(cfg, t);
+            const crmMetrics = await getCrmMetrics(t, kommoService, undefined, cfg.excludePipelineNames);
             const activity = await getActivityMetrics(t, kommoService, crmMetrics);
             return { team: t, label: cfg.label, crmMetrics, activity };
           })

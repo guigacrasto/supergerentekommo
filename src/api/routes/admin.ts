@@ -26,14 +26,13 @@ export function adminRouter() {
 
     try {
       const allPipelines: Array<{ id: number; name: string; team: string }> = [];
-      const tenant = req.tenant!;
-      const teamConfigs = getTeamConfigsFromTenant(tenant);
+      const teamConfigs = getTeamConfigsFromTenant(req.tenant);
 
       await Promise.all(
         Object.entries(teamConfigs).map(async ([team, cfg]) => {
           try {
-            const service = new KommoService(cfg, team, tenant.id);
-            const metrics = await getCrmMetrics(team, service, tenant.id, cfg.excludePipelineNames);
+            const service = new KommoService(cfg, team);
+            const metrics = await getCrmMetrics(team, service, undefined, cfg.excludePipelineNames);
             for (const [idStr, name] of Object.entries(metrics.pipelineNames)) {
               allPipelines.push({ id: Number(idStr), name, team });
             }
@@ -48,7 +47,6 @@ export function adminRouter() {
         .from("settings")
         .select("value")
         .eq("key", "paused_pipelines")
-        .eq("tenant_id", req.tenantId!)
         .single();
 
       if (setting?.value) {
@@ -94,7 +92,6 @@ export function adminRouter() {
         .from("settings")
         .select("value")
         .eq("key", "paused_pipelines")
-        .eq("tenant_id", req.tenantId!)
         .single();
 
       if (setting?.value) {
@@ -116,8 +113,8 @@ export function adminRouter() {
       const { error } = await supabase
         .from("settings")
         .upsert(
-          { key: "paused_pipelines", tenant_id: req.tenantId!, value: pausedIds },
-          { onConflict: "tenant_id,key" }
+          { key: "paused_pipelines", value: pausedIds },
+          { onConflict: "key" }
         );
 
       if (error) {
@@ -145,15 +142,14 @@ export function adminRouter() {
     }
 
     try {
-      const tenant = req.tenant!;
-      const teamConfigs = getTeamConfigsFromTenant(tenant);
+      const teamConfigs = getTeamConfigsFromTenant(req.tenant);
 
       const gruposByTeam: Record<string, string[]> = {};
       await Promise.all(
         Object.entries(teamConfigs).map(async ([team, cfg]) => {
           try {
-            const service = new KommoService(cfg, team, tenant.id);
-            const metrics = await getCrmMetrics(team, service, tenant.id, cfg.excludePipelineNames);
+            const service = new KommoService(cfg, team);
+            const metrics = await getCrmMetrics(team, service, undefined, cfg.excludePipelineNames);
             const gruposSet = new Set(Object.values(metrics.userGroups));
             gruposByTeam[team] = Array.from(gruposSet).sort();
           } catch (err: any) {
@@ -179,8 +175,7 @@ export function adminRouter() {
     try {
       const { data: profiles, error: profilesError } = await supabase
         .from("profiles")
-        .select("id, email, name, role, status, teams")
-        .eq("tenant_id", req.tenantId!);
+        .select("id, email, name, role, status, teams");
 
       if (profilesError) {
         res.status(500).json({ error: profilesError.message });
@@ -191,8 +186,7 @@ export function adminRouter() {
       try {
         const { data: permissions, error: permError } = await supabase
           .from("user_funnel_permissions")
-          .select("user_id, allowed_funnels")
-          .eq("tenant_id", req.tenantId!);
+          .select("user_id, allowed_funnels");
 
         if (!permError && permissions) {
           for (const perm of permissions) {
@@ -208,7 +202,6 @@ export function adminRouter() {
         const { data: groupSettings } = await supabase
           .from("settings")
           .select("key, value")
-          .eq("tenant_id", req.tenantId!)
           .like("key", "user_groups:%");
 
         if (groupSettings) {
@@ -240,6 +233,68 @@ export function adminRouter() {
     }
   });
 
+  router.patch("/users/:id/approve", async (req: AuthRequest, res) => {
+    if (!isAdmin(req)) {
+      res.status(403).json({ error: "Acesso restrito a administradores." });
+      return;
+    }
+
+    const userId = req.params.id;
+    const { status } = req.body;
+
+    if (!["approved", "denied"].includes(status)) {
+      res.status(400).json({ error: "Status deve ser 'approved' ou 'denied'." });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq("id", userId);
+
+      if (error) {
+        res.status(500).json({ error: error.message });
+        return;
+      }
+
+      res.json({ ok: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.patch("/users/:id/role", async (req: AuthRequest, res) => {
+    if (!isAdmin(req)) {
+      res.status(403).json({ error: "Acesso restrito a administradores." });
+      return;
+    }
+
+    const userId = req.params.id;
+    const { role } = req.body;
+
+    if (!["user", "admin", "superadmin"].includes(role)) {
+      res.status(400).json({ error: "Role deve ser 'user', 'admin' ou 'superadmin'." });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ role, updated_at: new Date().toISOString() })
+        .eq("id", userId);
+
+      if (error) {
+        res.status(500).json({ error: error.message });
+        return;
+      }
+
+      res.json({ ok: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   router.patch("/users/:id/funnels", async (req: AuthRequest, res) => {
     if (!isAdmin(req)) {
       res.status(403).json({ error: "Acesso restrito a administradores." });
@@ -260,7 +315,6 @@ export function adminRouter() {
         .upsert(
           {
             user_id: userId,
-            tenant_id: req.tenantId!,
             team,
             allowed_funnels,
             updated_at: new Date().toISOString(),
@@ -302,7 +356,6 @@ export function adminRouter() {
         .from("settings")
         .select("value")
         .eq("key", settingsKey)
-        .eq("tenant_id", req.tenantId!)
         .single();
 
       let current: Record<string, string[]> = {};
@@ -315,8 +368,8 @@ export function adminRouter() {
       const { error } = await supabase
         .from("settings")
         .upsert(
-          { key: settingsKey, tenant_id: req.tenantId!, value: current, updated_at: new Date().toISOString() },
-          { onConflict: "tenant_id,key" }
+          { key: settingsKey, value: current, updated_at: new Date().toISOString() },
+          { onConflict: "key" }
         );
 
       if (error) {
@@ -351,8 +404,7 @@ export function adminRouter() {
       const { error } = await supabase
         .from("profiles")
         .update({ teams })
-        .eq("id", userId)
-        .eq("tenant_id", req.tenantId!);
+        .eq("id", userId);
 
       if (error) {
         console.error("[Admin] Erro ao atualizar equipes:", error.message);
@@ -386,7 +438,6 @@ export function adminRouter() {
       let query = supabase
         .from("audit_logs")
         .select("*", { count: "exact" })
-        .eq("tenant_id", req.tenantId!)
         .order("created_at", { ascending: false })
         .range(offset, offset + limit - 1);
 
@@ -406,6 +457,11 @@ export function adminRouter() {
       const { data, count, error } = await query;
 
       if (error) {
+        // Table may not exist yet
+        if (error.code === '42P01') {
+          res.json({ logs: [], total: 0, page, limit });
+          return;
+        }
         res.status(500).json({ error: error.message });
         return;
       }
@@ -432,7 +488,6 @@ export function adminRouter() {
         .from("settings")
         .select("value")
         .eq("key", "hot_lead_statuses")
-        .eq("tenant_id", req.tenantId!)
         .single();
 
       const hotStatuses: number[] = data?.value
@@ -461,8 +516,8 @@ export function adminRouter() {
       const { error } = await supabase
         .from("settings")
         .upsert(
-          { key: "hot_lead_statuses", tenant_id: req.tenantId!, value: hotStatuses },
-          { onConflict: "tenant_id,key" }
+          { key: "hot_lead_statuses", value: hotStatuses },
+          { onConflict: "key" }
         );
 
       if (error) {
@@ -489,8 +544,7 @@ export function adminRouter() {
     const team = (req.query.team as string) || "azul";
 
     try {
-      const tenant = req.tenant!;
-      const teamConfigs = getTeamConfigsFromTenant(tenant);
+      const teamConfigs = getTeamConfigsFromTenant(req.tenant);
       const cfg = teamConfigs[team];
 
       if (!cfg || !cfg.subdomain || !cfg.clientId) {
@@ -520,8 +574,7 @@ export function adminRouter() {
     }
 
     try {
-      const tenant = req.tenant!;
-      const teamConfigs = getTeamConfigsFromTenant(tenant);
+      const teamConfigs = getTeamConfigsFromTenant(req.tenant);
       const cfg = teamConfigs[team];
 
       if (!cfg || !cfg.subdomain) {
@@ -529,7 +582,7 @@ export function adminRouter() {
         return;
       }
 
-      const service = new KommoService(cfg, team, tenant.id);
+      const service = new KommoService(cfg, team);
       await service.exchangeAuthCode(code);
 
       console.log(`[Admin] Token Kommo do time ${team} re-autorizado com sucesso`);

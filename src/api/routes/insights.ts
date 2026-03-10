@@ -20,15 +20,13 @@ export function insightsRouter() {
     next();
   }
 
-  // Helper: build services map from tenant for fetchFilteredInsights
+  // Helper: build services map for fetchFilteredInsights
   function buildServicesFromTenant(req: AuthRequest): Record<string, KommoService> {
-    const tenant = req.tenant!;
-    const tenantId = req.tenantId!;
-    const teamConfigs = getTeamConfigsFromTenant(tenant);
+    const teamConfigs = getTeamConfigsFromTenant(req.tenant);
     const result: Record<string, KommoService> = {};
     for (const [key, cfg] of Object.entries(teamConfigs)) {
       if (cfg.subdomain) {
-        result[key] = new KommoService(cfg, key, tenantId);
+        result[key] = new KommoService(cfg, key);
       }
     }
     return result;
@@ -37,10 +35,8 @@ export function insightsRouter() {
   // GET /filters — returns available funis and agentes for the user's teams
   router.get("/filters", requireAdmin, async (req, res) => {
     const authReq = req as AuthRequest;
-    const tenant = authReq.tenant!;
-    const tenantId = authReq.tenantId!;
     const userTeams = authReq.userTeams || [];
-    const teamConfigs = getTeamConfigsFromTenant(tenant);
+    const teamConfigs = getTeamConfigsFromTenant(authReq.tenant);
     const teamParam = (req.query.team as string) || "";
 
     const targetTeams = teamParam
@@ -53,8 +49,8 @@ export function insightsRouter() {
     for (const team of targetTeams) {
       try {
         const cfg = teamConfigs[team];
-        const kommoService = new KommoService(cfg, team, tenantId);
-        const metrics = await getCrmMetrics(team, kommoService, tenantId, cfg.excludePipelineNames);
+        const kommoService = new KommoService(cfg, team);
+        const metrics = await getCrmMetrics(team, kommoService, undefined, cfg.excludePipelineNames);
 
         // Collect funis (pipeline names)
         for (const name of Object.values(metrics.pipelineNames)) {

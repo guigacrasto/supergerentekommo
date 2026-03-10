@@ -2,27 +2,12 @@ import { Router } from "express";
 import { supabase } from "../supabase.js";
 import { sendPushToUser } from "../services/push.js";
 import { sendEmail } from "../services/email.js";
-import { getTenantByWebhookSecret } from "../services/tenant.js";
-import type { Tenant } from "../../types/index.js";
 
 export function webhooksRouter() {
   const router = Router();
 
   // POST /api/webhooks/kommo — Recebe eventos do Kommo
   router.post("/kommo", async (req, res) => {
-    // Lookup tenant by webhook secret
-    const secret = req.headers["x-webhook-secret"] as string;
-    if (!secret) {
-      res.status(401).json({ error: "Missing webhook secret" });
-      return;
-    }
-
-    const tenant = await getTenantByWebhookSecret(secret);
-    if (!tenant) {
-      res.status(403).json({ error: "Invalid webhook secret" });
-      return;
-    }
-
     try {
       const payload = req.body;
       const statusEvents = payload?.leads?.status || [];
@@ -30,11 +15,11 @@ export function webhooksRouter() {
       const updateEvents = payload?.leads?.update || [];
 
       for (const lead of statusEvents) {
-        await handleLeadStatusChange(lead, tenant);
+        await handleLeadStatusChange(lead);
       }
 
       for (const lead of addEvents) {
-        await handleLeadCreated(lead, tenant);
+        await handleLeadCreated(lead);
       }
 
       for (const lead of updateEvents) {
@@ -51,25 +36,24 @@ export function webhooksRouter() {
   return router;
 }
 
-async function handleLeadStatusChange(lead: any, tenant: Tenant): Promise<void> {
+async function handleLeadStatusChange(lead: any): Promise<void> {
   const pipelineId = lead.pipeline_id;
   const statusId = lead.status_id;
   const leadName = lead.name || `Lead ${lead.id}`;
   const responsibleUserId = lead.responsible_user_id;
 
-  // Check if this status is configured as "hot" for this tenant
-  const isHot = await isHotStatus(statusId, tenant.id);
+  // Check if this status is configured as "hot"
+  const isHot = await isHotStatus(statusId);
   if (!isHot) return;
 
-  console.log(`[Webhook:${tenant.slug}] Lead quente detectado: ${leadName} (pipeline ${pipelineId}, status ${statusId})`);
+  console.log(`[Webhook] Lead quente detectado: ${leadName} (pipeline ${pipelineId}, status ${statusId})`);
 
-  // Find all admin users for this tenant
+  // Find all admin users
   const { data: admins } = await supabase
     .from("profiles")
     .select("id, email, name")
     .eq("role", "admin")
-    .eq("status", "approved")
-    .eq("tenant_id", tenant.id);
+    .eq("status", "approved");
 
   if (!admins || admins.length === 0) return;
 
@@ -77,7 +61,7 @@ async function handleLeadStatusChange(lead: any, tenant: Tenant): Promise<void> 
   const body = `O lead "${leadName}" avançou para uma etapa quente no funil.`;
 
   for (const admin of admins) {
-    await createNotification(admin.id, tenant.id, "hot_lead", title, body, {
+    await createNotification(admin.id, "hot_lead", title, body, {
       lead_id: lead.id,
       pipeline_id: pipelineId,
       status_id: statusId,
@@ -101,7 +85,7 @@ async function handleLeadStatusChange(lead: any, tenant: Tenant): Promise<void> 
   }
 }
 
-async function handleLeadCreated(lead: any, tenant: Tenant): Promise<void> {
+async function handleLeadCreated(lead: any): Promise<void> {
   const pipelineId = lead.pipeline_id;
   const leadName = lead.name || `Lead ${lead.id}`;
 
@@ -109,15 +93,13 @@ async function handleLeadCreated(lead: any, tenant: Tenant): Promise<void> {
     .from("profiles")
     .select("id")
     .eq("role", "admin")
-    .eq("status", "approved")
-    .eq("tenant_id", tenant.id);
+    .eq("status", "approved");
 
   if (!admins) return;
 
   for (const admin of admins) {
     await createNotification(
       admin.id,
-      tenant.id,
       "lead_created",
       `Novo Lead: ${leadName}`,
       `Um novo lead "${leadName}" foi criado.`,
@@ -130,13 +112,12 @@ async function handleLeadUpdated(lead: any): Promise<void> {
   console.log(`[Webhook] Lead atualizado: ${lead.name || lead.id}`);
 }
 
-async function isHotStatus(statusId: number, tenantId: string): Promise<boolean> {
+async function isHotStatus(statusId: number): Promise<boolean> {
   try {
     const { data } = await supabase
       .from("settings")
       .select("value")
       .eq("key", "hot_lead_statuses")
-      .eq("tenant_id", tenantId)
       .single();
 
     if (!data?.value) return false;
@@ -153,7 +134,6 @@ async function isHotStatus(statusId: number, tenantId: string): Promise<boolean>
 
 async function createNotification(
   userId: string,
-  tenantId: string,
   type: string,
   title: string,
   body: string,
@@ -162,7 +142,6 @@ async function createNotification(
   try {
     await supabase.from("notifications").insert({
       user_id: userId,
-      tenant_id: tenantId,
       team: "default",
       type,
       title,

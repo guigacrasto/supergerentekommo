@@ -15,19 +15,13 @@ router.get('/tenants', async (_req: AuthRequest, res) => {
   try {
     const tenants = await getAllTenants();
 
-    const { data: counts } = await supabase
+    const { count: userCount } = await supabase
       .from('profiles')
-      .select('tenant_id');
-
-    const userCounts: Record<string, number> = {};
-    for (const row of counts || []) {
-      const tid = row.tenant_id as string;
-      if (tid) userCounts[tid] = (userCounts[tid] || 0) + 1;
-    }
+      .select('*', { count: 'exact', head: true });
 
     const result = tenants.map(t => ({
       ...t,
-      userCount: userCounts[t.id] || 0,
+      userCount: userCount || 0,
     }));
 
     res.json({ tenants: result });

@@ -28,12 +28,10 @@ export function leadsRouter() {
   // GET /api/leads/new/:pipelineId — find which team owns this pipeline, then fetch leads
   router.get("/new/:pipelineId", async (req, res) => {
     const authReq = req as AuthRequest;
-    const tenant = authReq.tenant!;
-    const tenantId = authReq.tenantId!;
     const { pipelineId } = req.params;
     const { from, to } = req.query;
     const userTeams = authReq.userTeams || [];
-    const teamConfigs = getTeamConfigsFromTenant(tenant);
+    const teamConfigs = getTeamConfigsFromTenant(authReq.tenant);
 
     try {
       // Find the team that owns this pipeline ID
@@ -43,7 +41,7 @@ export function leadsRouter() {
       for (const team of userTeams) {
         const cfg = teamConfigs[team];
         if (!cfg || !cfg.subdomain) continue;
-        const kommoService = new KommoService(cfg, team, tenantId);
+        const kommoService = new KommoService(cfg, team);
         const pipelines = await kommoService.getPipelines();
         const found = pipelines.find((p: any) => p.id === parseInt(pipelineId as string));
         if (found) {

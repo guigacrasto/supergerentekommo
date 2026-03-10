@@ -18,7 +18,6 @@ export function notificationsRouter() {
         .from("notifications")
         .select("*", { count: "exact" })
         .eq("user_id", req.userId!)
-        .eq("tenant_id", req.tenantId!)
         .order("created_at", { ascending: false })
         .range(offset, offset + limit - 1);
 
@@ -52,7 +51,6 @@ export function notificationsRouter() {
         .from("notifications")
         .select("*", { count: "exact", head: true })
         .eq("user_id", req.userId!)
-        .eq("tenant_id", req.tenantId!)
         .eq("read", false);
 
       if (error) {
@@ -73,8 +71,7 @@ export function notificationsRouter() {
         .from("notifications")
         .update({ read: true })
         .eq("id", req.params.id)
-        .eq("user_id", req.userId!)
-        .eq("tenant_id", req.tenantId!);
+        .eq("user_id", req.userId!);
 
       if (error) {
         res.status(500).json({ error: error.message });
@@ -94,7 +91,6 @@ export function notificationsRouter() {
         .from("notifications")
         .update({ read: true })
         .eq("user_id", req.userId!)
-        .eq("tenant_id", req.tenantId!)
         .eq("read", false);
 
       if (error) {
@@ -123,7 +119,6 @@ export function notificationsRouter() {
         .upsert(
           {
             user_id: req.userId!,
-            tenant_id: req.tenantId!,
             endpoint,
             keys,
           },
