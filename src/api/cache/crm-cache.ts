@@ -436,6 +436,8 @@ async function fetchAndCompute(
     if (snap.status_id === STATUS_LOST_DBG && snap.loss_reason_id && debugLostCount < 3) {
       const cfNames = (snap.custom_fields_values || []).map((cf: any) => `${cf.field_name}(${cf.field_id})`);
       console.log(`[CrmCache:${team}:DEBUG] Lost lead ${snap.id}: loss_reason_id=${snap.loss_reason_id}, CFs=[${cfNames.join(', ')}]`);
+      const motivoCf = (snap.custom_fields_values || []).find((cf: any) => /motivo\s*de?\s*perd/i.test(cf.field_name || ""));
+      if (motivoCf) console.log(`[CrmCache:${team}:DEBUG] Motivo CF values:`, JSON.stringify(motivoCf.values));
       debugLostCount++;
     }
   }
