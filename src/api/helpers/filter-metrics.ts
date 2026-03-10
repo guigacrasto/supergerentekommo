@@ -5,11 +5,12 @@ interface FilterOptions {
   tagMode?: "or" | "and";
   allowedFunnels?: number[];
   pausedPipelines?: number[];
+  allowedGroups?: string[];
   isAdmin?: boolean;
 }
 
 export function filterCrmMetrics(metrics: CrmMetrics, opts: FilterOptions): CrmMetrics {
-  const { tags, tagMode = "or", allowedFunnels = [], pausedPipelines = [], isAdmin = false } = opts;
+  const { tags, tagMode = "or", allowedFunnels = [], pausedPipelines = [], allowedGroups = [], isAdmin = false } = opts;
 
   // 1. Filter funis by allowedFunnels + pausedPipelines
   const filteredFunis: Record<string, any> = {};
@@ -22,12 +23,28 @@ export function filterCrmMetrics(metrics: CrmMetrics, opts: FilterOptions): CrmM
 
   const allowedPipelineIds = new Set(Object.keys(filteredFunis).map(Number));
 
-  // 2. Filter leadSnapshots by allowed pipelines
+  // 2. Build allowed user IDs from group permissions
+  const hasGroupRestriction = allowedGroups.length > 0;
+  const allowedUserIds = new Set<number>();
+  if (hasGroupRestriction) {
+    for (const [userId, groupName] of Object.entries(metrics.userGroups)) {
+      if (allowedGroups.includes(groupName)) {
+        allowedUserIds.add(Number(userId));
+      }
+    }
+  }
+
+  // 3. Filter leadSnapshots by allowed pipelines + groups
   let filteredSnapshots = metrics.leadSnapshots.filter(
     (l) => allowedPipelineIds.has(l.pipeline_id)
   );
+  if (hasGroupRestriction) {
+    filteredSnapshots = filteredSnapshots.filter(
+      (l) => allowedUserIds.has(l.responsible_user_id)
+    );
+  }
 
-  // 3. Filter by tags
+  // 4. Filter by tags
   if (tags && tags.length > 0) {
     filteredSnapshots = filteredSnapshots.filter((lead) => {
       const leadTagIds = lead.tags.map((t) => t.id);
@@ -38,16 +55,22 @@ export function filterCrmMetrics(metrics: CrmMetrics, opts: FilterOptions): CrmM
     });
   }
 
-  // 4. Filter vendedores by allowed pipelines
-  const filteredVendedores = metrics.vendedores.filter((v) => {
+  // 5. Filter vendedores by allowed pipelines + groups
+  let filteredVendedores = metrics.vendedores.filter((v) => {
     return Object.values(filteredFunis).some((f: any) => f.nome === v.funil);
   });
+  if (hasGroupRestriction) {
+    filteredVendedores = filteredVendedores.filter((v) => {
+      const uid = Object.entries(metrics.userNames).find(([, name]) => name === v.nome)?.[0];
+      return uid ? allowedUserIds.has(Number(uid)) : false;
+    });
+  }
 
-  // 5. Filter activeLeads
+  // 6. Filter activeLeads
   const allowedLeadIds = new Set(filteredSnapshots.map((s) => s.id));
   const filteredActiveLeads = metrics.activeLeads.filter((l) => allowedLeadIds.has(l.id));
 
-  // 6. Recalculate geral
+  // 7. Recalculate geral
   const STATUS_WON = 142;
   const STATUS_LOST = 143;
   const totalGanhos = filteredSnapshots.filter((l) => l.status_id === STATUS_WON).length;
@@ -85,7 +108,7 @@ export function filterCrmMetrics(metrics: CrmMetrics, opts: FilterOptions): CrmM
     novosMes: countCurrentMonth(filteredSnapshots),
   };
 
-  // 7. Collect tags from filtered snapshots
+  // 8. Collect tags from filtered snapshots
   const tagMap = new Map<number, string>();
   for (const snap of filteredSnapshots) {
     for (const t of snap.tags) {
@@ -96,6 +119,11 @@ export function filterCrmMetrics(metrics: CrmMetrics, opts: FilterOptions): CrmM
     .map(([id, name]) => ({ id, name }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  // 9. Filter userNames by group restrictions
+  const filteredUserNames = hasGroupRestriction
+    ? Object.fromEntries(Object.entries(metrics.userNames).filter(([id]) => allowedUserIds.has(Number(id))))
+    : metrics.userNames;
+
   return {
     funis: filteredFunis,
     vendedores: filteredVendedores,
@@ -105,7 +133,7 @@ export function filterCrmMetrics(metrics: CrmMetrics, opts: FilterOptions): CrmM
     pipelineNames: Object.fromEntries(
       Object.entries(metrics.pipelineNames).filter(([id]) => allowedPipelineIds.has(Number(id)))
     ),
-    userNames: metrics.userNames,
+    userNames: filteredUserNames,
     userGroups: metrics.userGroups,
     contactCfByLead: metrics.contactCfByLead,
     lossReasonNames: metrics.lossReasonNames,

@@ -13,7 +13,6 @@ import { TimeFilter } from '@/components/features/filters/TimeFilter';
 import { GroupFilter } from '@/components/features/filters/GroupFilter';
 
 interface LossMotivo {
-  loss_reason_id: number;
   nome: string;
   count: number;
   pct: string;
@@ -24,7 +23,7 @@ interface LossReasonsData {
   porAgente: Array<{
     nome: string;
     total: number;
-    motivos: Array<{ loss_reason_id: number; nome: string; count: number }>;
+    motivos: Array<{ nome: string; count: number }>;
   }>;
   totalPerdidos: number;
   funis: string[];

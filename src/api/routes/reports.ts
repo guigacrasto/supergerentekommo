@@ -90,6 +90,7 @@ export function reportsRouter() {
     const userTeams = req.userTeams || [];
     const { tags, tagMode } = parseTagsFromQuery(req.query);
     const allowedFunnels = req.allowedFunnels || { azul: [], amarela: [] };
+    const allowedGroups = req.allowedGroups || {};
     const pausedPipelines = req.pausedPipelines || [];
     const isAdmin = req.userRole === "admin";
 
@@ -102,6 +103,7 @@ export function reportsRouter() {
           tags,
           tagMode,
           allowedFunnels: allowedFunnels[team] || [],
+          allowedGroups: allowedGroups[team] || [],
           pausedPipelines,
           isAdmin,
         });
@@ -260,6 +262,7 @@ export function reportsRouter() {
             const filtered = filterCrmMetrics(raw, {
               tags, tagMode,
               allowedFunnels: allowedFunnels[team] || [],
+              allowedGroups: (req.allowedGroups || {})[team] || [],
               pausedPipelines, isAdmin,
             });
             const activity = await getActivityMetrics(team, kommoService, filtered);
@@ -327,6 +330,8 @@ export function reportsRouter() {
           pipelineNameToIds.get(cleanName)!.add(Number(key));
         }
         for (const [userId, userName] of Object.entries(metrics.userNames)) {
+          // Skip agents not in allowed groups
+          if (groupUserIds && !groupUserIds.has(Number(userId))) continue;
           agentesSet.add(userName);
           if (!agenteNameToIds.has(userName)) agenteNameToIds.set(userName, new Set());
           agenteNameToIds.get(userName)!.add(Number(userId));
@@ -350,7 +355,7 @@ export function reportsRouter() {
         if (filterAgenteIds) {
           leads = leads.filter((l) => filterAgenteIds.has(l.responsible_user_id));
         }
-        // Filter by group if selected
+        // Filter by group
         if (groupUserIds) {
           leads = leads.filter((l) => groupUserIds!.has(l.responsible_user_id));
         }
@@ -433,6 +438,7 @@ export function reportsRouter() {
           pipelineNameToIds.get(cleanName)!.add(Number(key));
         }
         for (const [userId, userName] of Object.entries(metrics.userNames)) {
+          if (groupUserIds && !groupUserIds.has(Number(userId))) continue;
           agentesSet.add(userName);
           if (!agenteNameToIds.has(userName)) agenteNameToIds.set(userName, new Set());
           agenteNameToIds.get(userName)!.add(Number(userId));
@@ -560,7 +566,7 @@ export function reportsRouter() {
       // Collect all lost leads in range
       const lostLeads: Array<{
         responsible_user_id: number;
-        loss_reason_id: number;
+        motivo: string;
         pipeline_id: number;
       }> = [];
       let userNamesMap: Record<number, string> = {};
@@ -575,8 +581,11 @@ export function reportsRouter() {
         Object.assign(lossReasonNamesMap, metrics.lossReasonNames);
         Object.assign(pipelineNamesMap, metrics.pipelineNames);
 
-        // Collect unique agente/funil names
+        // Collect unique agente/funil names (filtered by group permissions)
         for (const v of metrics.vendedores) {
+          // Look up userId for this agent name
+          const uid = Object.entries(metrics.userNames).find(([, name]) => name === v.nome)?.[0];
+          if (uid && groupUserIds && !groupUserIds.has(Number(uid))) continue;
           allAgentNames.add(v.nome);
           allFunilNames.add(v.funil.replace(/^FUNIL\s+/i, ""));
         }
@@ -599,9 +608,14 @@ export function reportsRouter() {
             }
             // Apply group filter
             if (groupUserIds && !groupUserIds.has(lead.responsible_user_id)) continue;
+
+            // Extract loss reason from custom field "Motivo de perda"
+            const motivoCf = getCustomFieldValue(lead, /motivo\s*de?\s*perd/i);
+            const motivo = motivoCf || "Sem motivo";
+
             lostLeads.push({
               responsible_user_id: lead.responsible_user_id,
-              loss_reason_id: lead.loss_reason_id || 0,
+              motivo,
               pipeline_id: lead.pipeline_id,
             });
           }
@@ -610,38 +624,36 @@ export function reportsRouter() {
 
       const totalPerdidos = lostLeads.length;
 
-      // Group by loss_reason_id
-      const motivosMap: Record<number, number> = {};
+      // Group by motivo (custom field value)
+      const motivosMap: Record<string, number> = {};
       for (const lead of lostLeads) {
-        motivosMap[lead.loss_reason_id] = (motivosMap[lead.loss_reason_id] || 0) + 1;
+        motivosMap[lead.motivo] = (motivosMap[lead.motivo] || 0) + 1;
       }
 
       const motivos = Object.entries(motivosMap)
-        .map(([reasonId, count]) => ({
-          loss_reason_id: Number(reasonId),
-          nome: Number(reasonId) === 0 ? "Sem motivo" : (lossReasonNamesMap[Number(reasonId)] || `Motivo ${reasonId}`),
+        .map(([nome, count]) => ({
+          nome,
           count,
           pct: totalPerdidos > 0 ? ((count / totalPerdidos) * 100).toFixed(1) + "%" : "0.0%",
         }))
         .sort((a, b) => b.count - a.count);
 
-      // Group by agent with breakdown by loss_reason
-      const porAgenteMap: Record<number, Record<number, number>> = {};
+      // Group by agent with breakdown by motivo
+      const porAgenteMap: Record<number, Record<string, number>> = {};
       for (const lead of lostLeads) {
         if (!porAgenteMap[lead.responsible_user_id]) {
           porAgenteMap[lead.responsible_user_id] = {};
         }
-        porAgenteMap[lead.responsible_user_id][lead.loss_reason_id] =
-          (porAgenteMap[lead.responsible_user_id][lead.loss_reason_id] || 0) + 1;
+        porAgenteMap[lead.responsible_user_id][lead.motivo] =
+          (porAgenteMap[lead.responsible_user_id][lead.motivo] || 0) + 1;
       }
 
       const porAgente = Object.entries(porAgenteMap)
         .map(([userId, reasons]) => {
           const total = Object.values(reasons).reduce((s, c) => s + c, 0);
           const motivosList = Object.entries(reasons)
-            .map(([reasonId, count]) => ({
-              loss_reason_id: Number(reasonId),
-              nome: Number(reasonId) === 0 ? "Sem motivo" : (lossReasonNamesMap[Number(reasonId)] || `Motivo ${reasonId}`),
+            .map(([nome, count]) => ({
+              nome,
               count,
             }))
             .sort((a, b) => b.count - a.count);
@@ -1017,6 +1029,7 @@ export function reportsRouter() {
           const metrics = filterCrmMetrics(raw, {
             tags, tagMode,
             allowedFunnels: allowedFunnels[team] || [],
+            allowedGroups: (req.allowedGroups || {})[team] || [],
             pausedPipelines, isAdmin,
           });
 
@@ -1128,6 +1141,7 @@ export function reportsRouter() {
               tags: [],
               tagMode: "or",
               allowedFunnels: allowedFunnels[team] || [],
+              allowedGroups: (req.allowedGroups || {})[team] || [],
               pausedPipelines,
               isAdmin,
             });
