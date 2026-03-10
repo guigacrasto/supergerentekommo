@@ -102,6 +102,21 @@ export async function requireAuth(
     // Table may not exist yet
   }
 
+  // Fetch globally paused pipelines from settings
+  let pausedPipelines: number[] = [];
+  try {
+    const { data: setting } = await supabase
+      .from("settings")
+      .select("value")
+      .eq("key", "paused_pipelines")
+      .single();
+    if (setting?.value) {
+      pausedPipelines = Array.isArray(setting.value) ? setting.value : JSON.parse(setting.value);
+    }
+  } catch {
+    // Table may not exist yet
+  }
+
   // Determine teams: admin see all configured, users see their own
   const teams: string[] = (profile.role === "admin" || profile.role === "superadmin")
     ? ALL_CONFIGURED_TEAMS
@@ -114,7 +129,7 @@ export async function requireAuth(
     teams,
     allowedFunnels,
     allowedGroups: {},
-    pausedPipelines: [],
+    pausedPipelines,
     expiresAt: Date.now() + AUTH_CACHE_TTL_MS,
   });
 
@@ -123,7 +138,7 @@ export async function requireAuth(
   req.userTeams = teams;
   req.allowedFunnels = allowedFunnels;
   req.allowedGroups = {};
-  req.pausedPipelines = [];
+  req.pausedPipelines = pausedPipelines;
 
   next();
 }

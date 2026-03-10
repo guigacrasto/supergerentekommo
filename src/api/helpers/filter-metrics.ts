@@ -15,7 +15,7 @@ export function filterCrmMetrics(metrics: CrmMetrics, opts: FilterOptions): CrmM
   const filteredFunis: Record<string, any> = {};
   for (const [key, funil] of Object.entries(metrics.funis)) {
     const pipelineId = Number(key);
-    if (!isAdmin && pausedPipelines.includes(pipelineId)) continue;
+    if (pausedPipelines.includes(pipelineId)) continue;
     if (allowedFunnels.length > 0 && !allowedFunnels.includes(pipelineId)) continue;
     filteredFunis[key] = funil;
   }
