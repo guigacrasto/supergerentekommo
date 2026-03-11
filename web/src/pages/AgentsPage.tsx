@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { BarChart3, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { BarChart3, ArrowUpDown, ArrowUp, ArrowDown, User } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import { useFilterStore } from '@/stores/filterStore';
@@ -105,12 +105,49 @@ export function AgentsPage() {
     ? [...FIXED_COLS, ...funnelCols.filter((f) => f === selectedFunil)]
     : FIXED_COLS;
 
+  const renderCellContent = (col: string, row: AgentRow) => {
+    const value = row[col];
+    if (value === undefined || value === null || value === '') return <span className="text-muted">—</span>;
+
+    if (col === 'Agente') {
+      return (
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
+            <User className="h-4 w-4 text-primary" />
+          </div>
+          <span className="font-heading font-semibold text-foreground">{value}</span>
+        </div>
+      );
+    }
+
+    if (col === 'Conversão %') {
+      const numVal = parseFloat(String(value).replace('%', ''));
+      const color = numVal >= 30 ? 'text-success' : numVal >= 15 ? 'text-warning' : 'text-danger';
+      return <span className={cn('font-heading font-bold tabular-nums', color)}>{value}</span>;
+    }
+
+    if (col === 'Venda Ganha') {
+      return <span className="font-heading font-semibold text-success tabular-nums">{value}</span>;
+    }
+
+    if (col === 'Venda Perdida') {
+      return <span className="font-heading font-semibold text-danger tabular-nums">{value}</span>;
+    }
+
+    if (col === 'Total Leads') {
+      return <span className="font-heading font-semibold text-foreground tabular-nums">{value}</span>;
+    }
+
+    // Funnel columns
+    return <span className="text-foreground tabular-nums">{value}</span>;
+  };
+
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <LiveTimestamp timestamp={lastFetchTime} />
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3 sm:gap-4">
         <TimeFilter teams={userTeams} selected={teamFilter} onChange={(t) => { setTeamFilter(t); setGroupFilter(''); }} />
         <GroupFilter grupos={grupos} selected={groupFilter} onChange={setGroupFilter} />
         <FunilFilter funis={funnelCols} />
@@ -120,13 +157,34 @@ export function AgentsPage() {
 
       {/* Table */}
       {loading ? (
-        <div className="rounded-card border border-glass-border bg-surface overflow-hidden">
-          <div className="p-3 space-y-2">
-            <Skeleton className="h-8 w-full" />
-            {[1, 2, 3, 4, 5].map((i) => (
-              <Skeleton key={i} className="h-9 w-full" />
-            ))}
-          </div>
+        <div className="overflow-x-auto rounded-card border border-glass-border bg-surface">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-surface-secondary text-muted text-body-sm">
+                {FIXED_COLS.map((col) => (
+                  <th key={col} className={cn('px-4 py-3 font-medium', col === 'Agente' ? 'text-left' : 'text-right')}>
+                    {col}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <tr key={i}>
+                  <td className="border-t border-glass-border px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-8 w-8 rounded-full" />
+                      <Skeleton className="h-5 w-28" />
+                    </div>
+                  </td>
+                  <td className="border-t border-glass-border px-4 py-3 text-right"><Skeleton className="ml-auto h-5 w-12" /></td>
+                  <td className="border-t border-glass-border px-4 py-3 text-right"><Skeleton className="ml-auto h-5 w-12" /></td>
+                  <td className="border-t border-glass-border px-4 py-3 text-right"><Skeleton className="ml-auto h-5 w-12" /></td>
+                  <td className="border-t border-glass-border px-4 py-3 text-right"><Skeleton className="ml-auto h-5 w-16" /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       ) : sortedRows.length === 0 ? (
         <EmptyState
@@ -135,58 +193,53 @@ export function AgentsPage() {
           description="Ajuste os filtros ou aguarde os dados serem carregados."
         />
       ) : (
-        <div className="rounded-card border border-glass-border bg-surface overflow-hidden">
-          <div className="overflow-x-auto max-h-[75vh]">
-            <table className="border-collapse text-xs">
-              <thead>
-                <tr>
+        <div className="overflow-x-auto rounded-card border border-glass-border bg-surface">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-surface-secondary text-muted text-body-sm">
+                {allCols.map((col) => (
+                  <th
+                    key={col}
+                    onClick={() => handleSort(col)}
+                    className={cn(
+                      'px-4 py-3 font-medium cursor-pointer hover:text-foreground transition-colors whitespace-nowrap',
+                      col === 'Agente' ? 'text-left' : 'text-right',
+                      sortCol === col && 'text-primary'
+                    )}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      {col}
+                      {sortCol === col ? (
+                        sortDir === 'desc' ? <ArrowDown className="h-3 w-3 text-primary" /> : <ArrowUp className="h-3 w-3 text-primary" />
+                      ) : (
+                        <ArrowUpDown className="h-3 w-3 opacity-40" />
+                      )}
+                    </span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sortedRows.map((row, i) => (
+                <tr
+                  key={i}
+                  className="hover:bg-surface-secondary/50 transition-colors"
+                >
                   {allCols.map((col) => (
-                    <th
+                    <td
                       key={col}
-                      onClick={() => handleSort(col)}
                       className={cn(
-                        'sticky top-0 z-10 cursor-pointer select-none whitespace-nowrap border-b border-glass-border bg-surface-secondary/80 backdrop-blur-sm px-1.5 py-1.5 text-left font-heading text-[11px] font-semibold text-muted transition-colors hover:text-[#E0E3E9]',
-                        sortCol === col && 'text-primary'
+                        'border-t border-glass-border px-4 py-3 text-body-md',
+                        col !== 'Agente' && 'text-right'
                       )}
                     >
-                      <span className="inline-flex items-center gap-0.5">
-                        {col}
-                        {sortCol === col ? (
-                          sortDir === 'desc' ? <ArrowDown className="h-2.5 w-2.5 text-primary" /> : <ArrowUp className="h-2.5 w-2.5 text-primary" />
-                        ) : (
-                          <ArrowUpDown className="h-2.5 w-2.5 opacity-40" />
-                        )}
-                      </span>
-                    </th>
+                      {renderCellContent(col, row)}
+                    </td>
                   ))}
                 </tr>
-              </thead>
-              <tbody>
-                {sortedRows.map((row, i) => (
-                  <tr
-                    key={i}
-                    className="border-b border-glass-border transition-colors hover:bg-white/[0.03]"
-                  >
-                    {allCols.map((col) => {
-                      const value = row[col];
-                      return (
-                        <td
-                          key={col}
-                          className={cn(
-                            'px-1.5 py-1 whitespace-nowrap',
-                            col === 'Agente' && 'font-heading font-medium',
-                            col === 'Conversão %' && 'font-heading font-medium'
-                          )}
-                        >
-                          {value ?? '—'}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
