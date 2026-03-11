@@ -87,6 +87,26 @@ export function createServer() {
         const rendaSamples: any[] = [];
         const profSamples: any[] = [];
 
+        // Debug: fetch raw contacts directly to check
+        let rawContactsCount = 0;
+        let rawContactsWithCf = 0;
+        const rawContactFieldNames: Record<string, number> = {};
+        try {
+          const rawContacts = await service.getContacts();
+          rawContactsCount = rawContacts.length;
+          for (const c of rawContacts) {
+            if (c.custom_fields_values && c.custom_fields_values.length > 0) {
+              rawContactsWithCf++;
+              for (const cf of c.custom_fields_values) {
+                const name = cf.field_name || cf.field_code || "unknown";
+                rawContactFieldNames[name] = (rawContactFieldNames[name] || 0) + 1;
+              }
+            }
+          }
+        } catch (e: any) {
+          console.error(`Debug: error fetching contacts for ${teamKey}:`, e.message);
+        }
+
         for (const lead of metrics.leadSnapshots) {
           totalLeads++;
           if (lead.custom_fields_values && lead.custom_fields_values.length > 0) {
@@ -123,6 +143,10 @@ export function createServer() {
           totalLeads,
           leadsWithCf,
           leadsWithContactCf,
+          contactCfByLeadCount: Object.keys(metrics.contactCfByLead).length,
+          rawContactsCount,
+          rawContactsWithCf,
+          rawContactFieldNames: Object.entries(rawContactFieldNames).sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count })),
           leadFields: Object.entries(leadFieldCounts).sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count })),
           contactFields: Object.entries(contactFieldCounts).sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count })),
           rendaSamples,
