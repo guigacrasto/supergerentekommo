@@ -277,10 +277,10 @@ export function AlertsPage() {
               key={value}
               onClick={() => setAlertFilter(value)}
               className={cn(
-                'px-3 py-1.5 rounded-button text-body-sm font-medium transition-colors cursor-pointer',
+                'px-3 py-1.5 rounded-badge text-body-sm font-medium transition-all duration-200 cursor-pointer',
                 alertFilter === value
-                  ? 'bg-primary text-white'
-                  : 'bg-surface-secondary text-muted hover:text-foreground'
+                  ? 'bg-primary text-white shadow-[0_1px_4px_rgba(149,102,242,0.3)]'
+                  : 'bg-surface-secondary/60 border border-glass-border text-muted hover:text-[#E0E3E9] hover:bg-white/[0.06]'
               )}
             >
               {label}
@@ -294,10 +294,10 @@ export function AlertsPage() {
         <button
           onClick={() => setTab('ativos')}
           className={cn(
-            'px-4 py-2.5 text-body-md font-medium border-b-2 transition-colors cursor-pointer',
+            'px-4 py-2.5 text-body-md font-medium border-b-2 transition-all duration-200 cursor-pointer',
             tab === 'ativos'
               ? 'border-primary text-primary'
-              : 'border-transparent text-muted hover:text-foreground'
+              : 'border-transparent text-muted hover:text-[#E0E3E9]'
           )}
         >
           Ativos

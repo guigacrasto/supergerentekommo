@@ -522,6 +522,9 @@ export function reportsRouter() {
       const pctRemarketing = totalLeads > 0
         ? ((totalRemarketing / totalLeads) * 100).toFixed(1) + "%"
         : "0.0%";
+      const pctFechamentoDia = totalLeads > 0
+        ? ((totalFechamentoDia / totalLeads) * 100).toFixed(1) + "%"
+        : "0.0%";
 
       const porAgente = Object.entries(porAgenteMap)
         .map(([userId, data]) => ({
@@ -539,6 +542,7 @@ export function reportsRouter() {
         totalFechamentoDia,
         totalRemarketing,
         pctRemarketing,
+        pctFechamentoDia,
         porAgente,
         funis,
         agentes,

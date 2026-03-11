@@ -46,7 +46,7 @@ export function SalesRanking({ title, data }: SalesRankingProps) {
               return (
                 <div
                   key={agent.nome}
-                  className="flex items-center gap-3 rounded-button border border-glass-border bg-surface-secondary px-4 py-3"
+                  className="flex items-center gap-3 rounded-card border border-glass-border bg-surface-secondary/50 px-4 py-3 transition-all duration-200 hover:bg-surface-secondary/80"
                 >
                   {/* Posicao */}
                   <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full">

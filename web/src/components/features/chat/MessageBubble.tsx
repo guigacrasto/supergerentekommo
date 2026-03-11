@@ -18,8 +18,8 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         className={cn(
           'max-w-[80%] px-4 py-3 text-body-md',
           isUser
-            ? 'rounded-t-card rounded-bl-card bg-gradient-to-br from-primary to-accent-blue text-white'
-            : 'rounded-t-card rounded-br-card bg-surface-secondary'
+            ? 'rounded-2xl rounded-tr-md bg-gradient-to-br from-primary to-accent-blue text-white shadow-[0_2px_8px_rgba(149,102,242,0.2)]'
+            : 'rounded-2xl rounded-tl-md bg-surface-secondary/80 border border-glass-border'
         )}
       >
         {isUser ? (

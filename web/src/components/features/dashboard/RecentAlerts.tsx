@@ -85,7 +85,7 @@ export function RecentAlerts({ alerts48h, alerts7d, tarefas }: RecentAlertsProps
                   href={alert.kommoUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-3 rounded-button px-3 py-2.5 transition-colors hover:bg-surface-secondary"
+                  className="flex items-center gap-3 rounded-card px-3 py-2.5 transition-all duration-200 hover:bg-white/[0.04]"
                 >
                   <Icon className="h-4 w-4 flex-shrink-0 text-muted" />
                   <div className="flex flex-1 items-center justify-between gap-2 min-w-0">

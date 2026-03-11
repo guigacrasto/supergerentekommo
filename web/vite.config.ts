@@ -81,7 +81,11 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       proxy: {
-        '/api': 'http://localhost:3000',
+        '/api': {
+          target: 'https://supergerentekommo-production.up.railway.app',
+          changeOrigin: true,
+          secure: true,
+        },
       },
     },
   };

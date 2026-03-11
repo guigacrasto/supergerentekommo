@@ -4,21 +4,21 @@ import { forwardRef } from 'react';
 import { Loader2 } from 'lucide-react';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 font-heading font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 cursor-pointer',
+  'inline-flex items-center justify-center gap-2 font-heading font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-primary-900 disabled:pointer-events-none disabled:opacity-50 cursor-pointer',
   {
     variants: {
       variant: {
         primary:
-          'bg-gradient-to-br from-primary to-accent-blue text-white hover:opacity-90 active:opacity-80',
+          'bg-gradient-to-br from-primary to-accent-blue text-white shadow-[0_1px_2px_rgba(149,102,242,0.3)] hover:shadow-[0_2px_8px_rgba(149,102,242,0.4)] hover:brightness-110 active:brightness-95',
         secondary:
-          'bg-surface border border-glass-border text-[#E0E3E9] hover:bg-surface-secondary',
-        ghost: 'text-muted hover:text-[#E0E3E9] hover:bg-surface-secondary',
-        danger: 'bg-danger text-white hover:opacity-90',
-        success: 'bg-success text-white hover:opacity-90',
+          'bg-surface border border-glass-border text-[#E0E3E9] hover:bg-surface-secondary hover:border-white/10',
+        ghost: 'text-muted hover:text-[#E0E3E9] hover:bg-white/[0.06]',
+        danger: 'bg-danger text-white shadow-[0_1px_2px_rgba(239,68,68,0.3)] hover:shadow-[0_2px_8px_rgba(239,68,68,0.3)] hover:brightness-110',
+        success: 'bg-success text-white shadow-[0_1px_2px_rgba(34,197,94,0.3)] hover:shadow-[0_2px_8px_rgba(34,197,94,0.3)] hover:brightness-110',
       },
       size: {
         sm: 'h-8 px-3 text-body-sm rounded-button',
-        md: 'h-10 px-4 text-body-md rounded-button',
+        md: 'h-10 px-5 text-body-md rounded-button',
         lg: 'h-12 px-6 text-body-lg rounded-button',
         icon: 'h-10 w-10 rounded-button',
       },

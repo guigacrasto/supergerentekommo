@@ -127,7 +127,7 @@ export function ProfilePage() {
       {/* Profile Info Card */}
       <Card className="p-6">
         <div className="mb-6 flex items-center gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/20">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-accent-blue/20 border border-primary/20">
             <UserIcon className="h-7 w-7 text-primary" />
           </div>
           <div className="flex-1">

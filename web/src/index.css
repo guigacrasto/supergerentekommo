@@ -4,7 +4,10 @@
 /* Base styles */
 @layer base {
   body {
-    @apply font-body text-body-md bg-primary-900 text-[#E0E3E9] overflow-hidden;
+    @apply font-body text-body-md bg-primary-900 text-[#E0E3E9] overflow-hidden antialiased;
+  }
+  * {
+    @apply border-glass-border;
   }
 }
 

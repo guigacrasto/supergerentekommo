@@ -87,7 +87,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               <button
                 onClick={toggle}
                 title="Recolher menu"
-                className="flex items-center justify-center rounded-button p-1.5 text-white/50 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+                className="flex items-center justify-center rounded-button p-1.5 text-white/40 hover:bg-white/[0.06] hover:text-white/80 transition-all duration-200 cursor-pointer"
               >
                 <ChevronsLeft className="h-4 w-4" />
               </button>
@@ -117,11 +117,11 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 title={isCollapsed ? label : undefined}
                 className={({ isActive }) =>
                   cn(
-                    'flex items-center rounded-button px-3 py-2.5 text-body-md font-medium transition-colors duration-150',
+                    'flex items-center rounded-button px-3 py-2.5 text-body-md font-medium transition-all duration-200',
                     isCollapsed ? 'justify-center' : 'gap-3',
                     isActive
-                      ? 'border-l-2 border-primary bg-primary/20 text-white'
-                      : 'text-white/70 hover:bg-white/10 hover:text-white'
+                      ? 'bg-primary/15 text-primary shadow-[inset_0_0_0_1px_rgba(149,102,242,0.15)]'
+                      : 'text-white/60 hover:bg-white/[0.06] hover:text-white/90'
                   )
                 }
               >
@@ -140,11 +140,11 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 title={isCollapsed ? label : undefined}
                 className={({ isActive }) =>
                   cn(
-                    'flex items-center rounded-button px-3 py-2.5 text-body-md font-medium transition-colors duration-150',
+                    'flex items-center rounded-button px-3 py-2.5 text-body-md font-medium transition-all duration-200',
                     isCollapsed ? 'justify-center' : 'gap-3',
                     isActive
-                      ? 'border-l-2 border-primary bg-primary/20 text-white'
-                      : 'text-white/70 hover:bg-white/10 hover:text-white'
+                      ? 'bg-primary/15 text-primary shadow-[inset_0_0_0_1px_rgba(149,102,242,0.15)]'
+                      : 'text-white/60 hover:bg-white/[0.06] hover:text-white/90'
                   )
                 }
               >
@@ -163,11 +163,11 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 title={isCollapsed ? 'Admin' : undefined}
                 className={({ isActive }) =>
                   cn(
-                    'flex items-center rounded-button px-3 py-2.5 text-body-md font-medium transition-colors duration-150',
+                    'flex items-center rounded-button px-3 py-2.5 text-body-md font-medium transition-all duration-200',
                     isCollapsed ? 'justify-center' : 'gap-3',
                     isActive
-                      ? 'border-l-2 border-primary bg-primary/20 text-white'
-                      : 'text-white/70 hover:bg-white/10 hover:text-white'
+                      ? 'bg-primary/15 text-primary shadow-[inset_0_0_0_1px_rgba(149,102,242,0.15)]'
+                      : 'text-white/60 hover:bg-white/[0.06] hover:text-white/90'
                   )
                 }
               >
@@ -186,11 +186,11 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 title={isCollapsed ? 'Super Admin' : undefined}
                 className={({ isActive }) =>
                   cn(
-                    'flex items-center rounded-button px-3 py-2.5 text-body-md font-medium transition-colors duration-150',
+                    'flex items-center rounded-button px-3 py-2.5 text-body-md font-medium transition-all duration-200',
                     isCollapsed ? 'justify-center' : 'gap-3',
                     isActive
-                      ? 'border-l-2 border-primary bg-primary/20 text-white'
-                      : 'text-white/70 hover:bg-white/10 hover:text-white'
+                      ? 'bg-primary/15 text-primary shadow-[inset_0_0_0_1px_rgba(149,102,242,0.15)]'
+                      : 'text-white/60 hover:bg-white/[0.06] hover:text-white/90'
                   )
                 }
               >
@@ -260,18 +260,18 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-white/10 px-3 py-3 space-y-1">
+      <div className="border-t border-white/[0.06] px-3 py-3 space-y-1">
         <NavLink
           to="/profile"
           onClick={handleNavClick}
           title={isCollapsed ? 'Perfil' : undefined}
           className={({ isActive }) =>
             cn(
-              'flex w-full items-center rounded-button px-3 py-2 text-body-md transition-colors cursor-pointer',
+              'flex w-full items-center rounded-button px-3 py-2 text-body-md transition-all duration-200 cursor-pointer',
               isCollapsed ? 'justify-center' : 'gap-3',
               isActive
-                ? 'border-l-2 border-primary bg-primary/20 text-white'
-                : 'text-white/70 hover:bg-white/10 hover:text-white'
+                ? 'bg-primary/15 text-primary shadow-[inset_0_0_0_1px_rgba(149,102,242,0.15)]'
+                : 'text-white/60 hover:bg-white/[0.06] hover:text-white/90'
             )
           }
         >
@@ -282,7 +282,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           onClick={handleLogout}
           title={isCollapsed ? 'Sair' : undefined}
           className={cn(
-            'flex w-full items-center rounded-button px-3 py-2 text-body-md text-white/70 hover:bg-white/10 hover:text-white transition-colors cursor-pointer',
+            'flex w-full items-center rounded-button px-3 py-2 text-body-md text-white/60 hover:bg-white/[0.06] hover:text-white/90 transition-all duration-200 cursor-pointer',
             isCollapsed ? 'justify-center' : 'gap-3'
           )}
         >

@@ -143,7 +143,7 @@ export function AgentsPage() {
                       key={col}
                       onClick={() => handleSort(col)}
                       className={cn(
-                        'sticky top-0 z-10 cursor-pointer select-none whitespace-nowrap border-b border-glass-border bg-surface-secondary px-4 py-3 text-left font-heading text-body-sm font-semibold text-muted transition-colors hover:text-foreground',
+                        'sticky top-0 z-10 cursor-pointer select-none whitespace-nowrap border-b border-glass-border bg-surface-secondary/80 backdrop-blur-sm px-4 py-3 text-left font-heading text-body-sm font-semibold text-muted transition-all duration-200 hover:text-[#E0E3E9]',
                         sortCol === col && 'text-primary'
                       )}
                     >
@@ -163,7 +163,7 @@ export function AgentsPage() {
                 {sortedRows.map((row, i) => (
                   <tr
                     key={i}
-                    className="border-b border-glass-border transition-colors hover:bg-surface-secondary/50"
+                    className="border-b border-glass-border transition-all duration-200 hover:bg-white/[0.03]"
                   >
                     {allCols.map((col) => {
                       const value = row[col];

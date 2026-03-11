@@ -380,7 +380,7 @@ export function DashboardPage() {
                       setAgentFilter('filterFunil', stripFunilPrefix(p.nome));
                       navigate('/agents');
                     }}
-                    className="flex w-full items-center justify-between rounded-button border border-glass-border bg-surface-secondary p-4 cursor-pointer transition-colors hover:bg-surface-secondary/80 hover:border-primary/40"
+                    className="flex w-full items-center justify-between rounded-card border border-glass-border bg-surface-secondary/50 p-4 cursor-pointer transition-all duration-200 hover:bg-surface-secondary/80 hover:border-white/10 hover:shadow-card-hover"
                   >
                     <span className="font-heading text-heading-sm">
                       {stripFunilPrefix(p.nome)}

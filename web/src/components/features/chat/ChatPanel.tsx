@@ -77,10 +77,10 @@ export function ChatPanel() {
     <div className="flex h-full flex-col">
       <MentorSelector />
 
-      <div ref={scrollRef} className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
+      <div ref={scrollRef} className="flex flex-1 flex-col gap-4 overflow-y-auto p-4 md:p-6">
         {showWelcome && (
           <div className="flex justify-start">
-            <div className="max-w-[80%] rounded-t-card rounded-br-card bg-surface-secondary px-4 py-3 text-body-md ">
+            <div className="max-w-[80%] rounded-2xl rounded-tl-md bg-surface-secondary/80 border border-glass-border px-4 py-3 text-body-md">
               <p>{getWelcomeMessage(selectedMentorIds, mentorNames)}</p>
             </div>
           </div>
@@ -92,7 +92,7 @@ export function ChatPanel() {
 
         {loading && (
           <div className="flex justify-start">
-            <div className="max-w-[80%] rounded-t-card rounded-br-card bg-surface-secondary px-4 py-3 text-body-md  animate-pulse">
+            <div className="max-w-[80%] rounded-2xl rounded-tl-md bg-surface-secondary/80 border border-glass-border px-4 py-3 text-body-md animate-pulse">
               ...
             </div>
           </div>

@@ -20,10 +20,10 @@ export function GroupFilter({ grupos, selected, onChange }: GroupFilterProps) {
       <button
         onClick={() => setOpen(!open)}
         className={cn(
-          'flex items-center gap-2 px-3 py-2 rounded-button border text-body-sm font-medium transition-colors cursor-pointer',
+          'flex items-center gap-2 px-3 py-2 rounded-button border text-body-sm font-medium transition-all duration-200 cursor-pointer',
           active
-            ? 'border-primary bg-primary/10 text-primary'
-            : 'border-glass-border bg-surface-secondary text-muted hover:text-foreground'
+            ? 'border-primary/30 bg-primary/10 text-primary'
+            : 'border-glass-border bg-surface-secondary/60 text-muted hover:text-[#E0E3E9] hover:border-white/10'
         )}
       >
         <UsersRound className="h-4 w-4" />
@@ -32,7 +32,7 @@ export function GroupFilter({ grupos, selected, onChange }: GroupFilterProps) {
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 min-w-[220px] max-h-[280px] overflow-y-auto rounded-card border border-glass-border bg-surface shadow-lg">
+        <div className="absolute top-full left-0 mt-1.5 z-50 min-w-[220px] max-h-[280px] overflow-y-auto rounded-card border border-glass-border bg-surface/95 backdrop-blur-glass shadow-lg">
           {active && (
             <button
               onClick={() => { onChange(''); setOpen(false); }}

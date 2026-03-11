@@ -60,8 +60,8 @@ export function TeamBarChart({ team, label, agents, color }: TeamBarChartProps) 
             >
               <XAxis
                 type="number"
-                tick={{ fill: '#959CA6', fontSize: 12 }}
-                axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
+                tick={{ fill: '#A0A0B8', fontSize: 12 }}
+                axisLine={{ stroke: 'rgba(255,255,255,0.06)' }}
                 tickLine={false}
               />
               <YAxis
@@ -74,9 +74,9 @@ export function TeamBarChart({ team, label, agents, color }: TeamBarChartProps) 
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: '#22182D',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  borderRadius: '8px',
+                  backgroundColor: '#1A1A2E',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  borderRadius: '10px',
                   color: '#FFFFFF',
                   fontSize: '0.875rem',
                 }}

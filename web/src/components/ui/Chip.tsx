@@ -15,10 +15,10 @@ export function Chip({
   return (
     <button
       className={cn(
-        'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-badge text-body-sm font-heading font-medium transition-colors duration-150 cursor-pointer',
+        'inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-badge text-body-sm font-heading font-medium transition-all duration-200 cursor-pointer',
         active
-          ? 'bg-primary text-white'
-          : 'bg-surface-secondary border border-glass-border text-muted hover:text-[#E0E3E9] hover:bg-surface',
+          ? 'bg-primary text-white shadow-[0_1px_4px_rgba(149,102,242,0.3)]'
+          : 'bg-surface-secondary/60 border border-glass-border text-muted hover:text-[#E0E3E9] hover:bg-white/[0.06] hover:border-white/10',
         className
       )}
       {...props}
