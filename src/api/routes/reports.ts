@@ -781,15 +781,65 @@ export function reportsRouter() {
       }
       faixasMap["Não informado"] = { volume: 0, fechamentos: 0, totalPrice: 0 };
 
+      // Helper: parse Brazilian currency/number format (e.g. "R$ 5.000,50" → 5000.5)
+      function parseBrazilianNumber(raw: string): number {
+        let digits = raw.replace(/[^\d.,]/g, "");
+        // If has both dot and comma, dot is thousands separator and comma is decimal
+        if (digits.includes(".") && digits.includes(",")) {
+          digits = digits.replace(/\./g, "").replace(",", ".");
+        } else if (digits.includes(",")) {
+          // Only comma → decimal separator
+          digits = digits.replace(",", ".");
+        } else if (digits.includes(".")) {
+          // Only dot — check if it's thousands separator (e.g. "5.000" = 5000)
+          const parts = digits.split(".");
+          if (parts.length === 2 && parts[1].length === 3) {
+            digits = digits.replace(".", ""); // thousands separator
+          }
+          // else keep as decimal (e.g. "5.5")
+        }
+        return parseFloat(digits);
+      }
+
+      // Helper: match renda string directly against bracket labels
+      function matchBracketLabel(raw: string): string | null {
+        const lower = raw.toLowerCase();
+        for (const b of brackets) {
+          if (lower.includes(b.label.toLowerCase())) return b.label;
+        }
+        // Heuristic matches for common enum values
+        if (/at[eé]\s*(r\$\s*)?2[\.\s]?000/i.test(raw)) return brackets[0].label;
+        if (/2[\.\s]?001|2[\.\s]?000\s*a\s*5[\.\s]?000/i.test(raw)) return brackets[1].label;
+        if (/5[\.\s]?001|5[\.\s]?000\s*a\s*10[\.\s]?000/i.test(raw)) return brackets[2].label;
+        if (/10[\.\s]?001|10[\.\s]?000\s*a\s*20[\.\s]?000/i.test(raw)) return brackets[3].label;
+        if (/acima|20[\.\s]?001|mais\s*de\s*20/i.test(raw)) return brackets[4].label;
+        return null;
+      }
+
+      // Debug: log unique renda values
+      const rendaDebug = new Map<string, number>();
+
       for (const lead of leads) {
-        const rendaValue = lead.renda ? parseFloat(lead.renda.replace(/[^\d.,]/g, "").replace(",", ".")) : NaN;
         let bracketLabel = "Não informado";
 
-        if (!isNaN(rendaValue)) {
-          for (const b of brackets) {
-            if (rendaValue >= b.min && rendaValue <= b.max) {
-              bracketLabel = b.label;
-              break;
+        if (lead.renda) {
+          // Count for debug
+          rendaDebug.set(lead.renda, (rendaDebug.get(lead.renda) || 0) + 1);
+
+          // 1. Try direct label matching (enum/select fields)
+          const labelMatch = matchBracketLabel(lead.renda);
+          if (labelMatch) {
+            bracketLabel = labelMatch;
+          } else {
+            // 2. Try parsing as number
+            const rendaValue = parseBrazilianNumber(lead.renda);
+            if (!isNaN(rendaValue) && rendaValue > 0) {
+              for (const b of brackets) {
+                if (rendaValue >= b.min && rendaValue <= b.max) {
+                  bracketLabel = b.label;
+                  break;
+                }
+              }
             }
           }
         }
@@ -801,8 +851,21 @@ export function reportsRouter() {
         }
       }
 
+      // Log unique renda values for debugging
+      console.log(`[Income] ${leads.length} leads, ${rendaDebug.size} unique renda values:`);
+      for (const [val, count] of [...rendaDebug.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20)) {
+        console.log(`  "${val}" → ${count}x`);
+      }
+
+      let totalVolume = 0;
+      let totalFechamentos = 0;
+      let totalPrice = 0;
+
       const faixas = [...brackets.map((b) => b.label), "Não informado"].map((label) => {
         const data = faixasMap[label];
+        totalVolume += data.volume;
+        totalFechamentos += data.fechamentos;
+        totalPrice += data.totalPrice;
         return {
           faixa: label,
           volume: data.volume,
@@ -816,7 +879,22 @@ export function reportsRouter() {
         };
       });
 
-      res.json({ faixas, funis: Array.from(allFunilNames).sort(), grupos: Array.from(allGroups).sort() });
+      const pctConversao = totalVolume > 0
+        ? ((totalFechamentos / totalVolume) * 100).toFixed(1) + "%"
+        : "0.0%";
+      const ticketMedioGeral = totalFechamentos > 0
+        ? Math.round(totalPrice / totalFechamentos)
+        : 0;
+
+      res.json({
+        faixas,
+        totalVolume,
+        totalFechamentos,
+        pctConversao,
+        ticketMedioGeral,
+        funis: Array.from(allFunilNames).sort(),
+        grupos: Array.from(allGroups).sort(),
+      });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

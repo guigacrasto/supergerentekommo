@@ -134,7 +134,7 @@ export function AgentsPage() {
       ) : (
         <div className="rounded-card border border-glass-border bg-surface overflow-hidden">
           <div className="overflow-x-auto max-h-[75vh]">
-            <table className="w-max min-w-full border-collapse text-body-sm">
+            <table className="border-collapse text-xs">
               <thead>
                 <tr>
                   {allCols.map((col) => (
@@ -142,16 +142,16 @@ export function AgentsPage() {
                       key={col}
                       onClick={() => handleSort(col)}
                       className={cn(
-                        'sticky top-0 z-10 cursor-pointer select-none whitespace-nowrap border-b border-glass-border bg-surface-secondary/80 backdrop-blur-sm px-2.5 py-2 text-left font-heading text-body-xs font-semibold text-muted transition-all duration-200 hover:text-[#E0E3E9]',
+                        'sticky top-0 z-10 cursor-pointer select-none whitespace-nowrap border-b border-glass-border bg-surface-secondary/80 backdrop-blur-sm px-1.5 py-1.5 text-left font-heading text-[11px] font-semibold text-muted transition-colors hover:text-[#E0E3E9]',
                         sortCol === col && 'text-primary'
                       )}
                     >
-                      <span className="inline-flex items-center gap-1">
+                      <span className="inline-flex items-center gap-0.5">
                         {col}
                         {sortCol === col ? (
-                          sortDir === 'desc' ? <ArrowDown className="h-3 w-3 text-primary" /> : <ArrowUp className="h-3 w-3 text-primary" />
+                          sortDir === 'desc' ? <ArrowDown className="h-2.5 w-2.5 text-primary" /> : <ArrowUp className="h-2.5 w-2.5 text-primary" />
                         ) : (
-                          <ArrowUpDown className="h-3 w-3 opacity-40" />
+                          <ArrowUpDown className="h-2.5 w-2.5 opacity-40" />
                         )}
                       </span>
                     </th>
@@ -162,7 +162,7 @@ export function AgentsPage() {
                 {sortedRows.map((row, i) => (
                   <tr
                     key={i}
-                    className="border-b border-glass-border transition-all duration-200 hover:bg-white/[0.03]"
+                    className="border-b border-glass-border transition-colors hover:bg-white/[0.03]"
                   >
                     {allCols.map((col) => {
                       const value = row[col];
@@ -170,7 +170,7 @@ export function AgentsPage() {
                         <td
                           key={col}
                           className={cn(
-                            'px-2.5 py-1.5 whitespace-nowrap',
+                            'px-1.5 py-1 whitespace-nowrap',
                             col === 'Agente' && 'font-heading font-medium',
                             col === 'Conversão %' && 'font-heading font-medium'
                           )}
