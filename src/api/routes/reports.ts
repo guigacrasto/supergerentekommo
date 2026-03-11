@@ -1516,6 +1516,7 @@ export function reportsRouter() {
         predictions,
         total: predictions.length,
         team: teamFilter,
+        subdomain: cfg.subdomain,
         atualizadoEm: metrics.atualizadoEm,
       });
     } catch (error: any) {

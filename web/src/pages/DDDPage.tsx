@@ -92,7 +92,7 @@ function EstadoFilter({ estados, selected, onChange }: { estados: string[]; sele
   );
 }
 
-type SortKey = 'ddd' | 'estado' | 'volume' | 'fechamentos' | 'conversao' | 'ticketMedio';
+type SortKey = 'ddd' | 'estado' | 'volume' | 'pct' | 'fechamentos' | 'conversao' | 'ticketMedio';
 
 export function DDDPage() {
   const user = useAuthStore((s) => s.user);
@@ -154,6 +154,8 @@ export function DDDPage() {
           cmp = a.estado.localeCompare(b.estado, 'pt-BR');
         } else if (sortKey === 'conversao') {
           cmp = parseFloat(a.conversao) - parseFloat(b.conversao);
+        } else if (sortKey === 'pct') {
+          cmp = a.volume - b.volume;
         } else {
           cmp = (a[sortKey] as number) - (b[sortKey] as number);
         }
@@ -213,7 +215,7 @@ export function DDDPage() {
               <SortHeader label="DDD" field="ddd" align="left" />
               <SortHeader label="Estado" field="estado" align="left" />
               <SortHeader label="Volume" field="volume" />
-              <th className="px-4 py-3 text-right font-medium">%</th>
+              <SortHeader label="%" field="pct" />
               <SortHeader label="Fechamentos" field="fechamentos" />
               <SortHeader label="Conversão %" field="conversao" />
               <SortHeader label="Ticket Médio" field="ticketMedio" />

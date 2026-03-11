@@ -49,17 +49,23 @@ function ScoreBar({ score }: { score: number }) {
   );
 }
 
-function PredictionCard({ prediction }: { prediction: LeadPrediction }) {
+function PredictionCard({ prediction, subdomain }: { prediction: LeadPrediction; subdomain: string }) {
   const [expanded, setExpanded] = useState(false);
   const nivelConfig = NIVEL_CONFIG[prediction.nivel];
+  const kommoUrl = subdomain ? `https://${subdomain}.kommo.com/leads/detail/${prediction.leadId}` : '';
 
   return (
     <div className="rounded-card border border-glass-border bg-surface-secondary p-4 space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <h3 className="text-body-md font-heading font-semibold text-foreground truncate">
+          <a
+            href={kommoUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-body-md font-heading font-semibold text-foreground truncate block hover:text-primary transition-colors"
+          >
             {prediction.titulo}
-          </h3>
+          </a>
           <div className="flex items-center gap-2 mt-1">
             <span className="text-body-sm text-muted">{prediction.agente}</span>
             <span className="text-body-sm text-muted">•</span>
@@ -110,6 +116,7 @@ export function PredictionsPage() {
   const [loading, setLoading] = useState(true);
   const [team] = useState('azul');
   const [atualizadoEm, setAtualizadoEm] = useState('');
+  const [subdomain, setSubdomain] = useState('');
 
   const fetchPredictions = useCallback(async () => {
     try {
@@ -117,9 +124,11 @@ export function PredictionsPage() {
       const res = await api.get<{
         predictions: LeadPrediction[];
         atualizadoEm: string;
+        subdomain: string;
       }>(`/reports/predictions?team=${team}`);
       setPredictions(res.data.predictions);
       setAtualizadoEm(res.data.atualizadoEm);
+      setSubdomain(res.data.subdomain || '');
     } catch (err) {
       console.error('[PredictionsPage] Erro:', err);
     } finally {
@@ -225,7 +234,7 @@ export function PredictionsPage() {
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {predictions.map((p) => (
-            <PredictionCard key={p.leadId} prediction={p} />
+            <PredictionCard key={p.leadId} prediction={p} subdomain={subdomain} />
           ))}
         </div>
       )}
