@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { CalendarDays, XCircle } from 'lucide-react';
+import { CalendarDays, XCircle, Percent, Calendar, CalendarRange } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
@@ -26,9 +26,15 @@ interface LossReasonsData {
     motivos: Array<{ nome: string; count: number }>;
   }>;
   totalPerdidos: number;
+  pctPerdidos: string;
   funis: string[];
   agentes: string[];
   grupos: string[];
+}
+
+interface PeriodLoss {
+  total: number;
+  pct: string;
 }
 
 const BAR_COLORS = [
@@ -47,6 +53,20 @@ function getToday(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function getMondayOfWeek(): string {
+  const d = new Date();
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  d.setDate(diff);
+  return d.toISOString().slice(0, 10);
+}
+
+function getFirstOfMonth(): string {
+  const d = new Date();
+  d.setDate(1);
+  return d.toISOString().slice(0, 10);
+}
+
 export function LossReasonsPage() {
   const user = useAuthStore((s) => s.user);
   const selectedFunil = useFilterStore((s) => s.selectedFunil);
@@ -58,6 +78,13 @@ export function LossReasonsPage() {
   const [to, setTo] = useState(getToday);
   const [teamFilter, setTeamFilter] = useState('');
   const [lastFetchTime, setLastFetchTime] = useState('');
+
+  const [periodData, setPeriodData] = useState<{
+    mes: PeriodLoss | null;
+    semana: PeriodLoss | null;
+    dia: PeriodLoss | null;
+  }>({ mes: null, semana: null, dia: null });
+  const [periodLoading, setPeriodLoading] = useState(true);
 
   const userTeams = user?.teams ?? [];
 
@@ -79,9 +106,41 @@ export function LossReasonsPage() {
     }
   }, []);
 
+  const fetchPeriods = useCallback(async (funil: string, agente: string, team: string, group: string) => {
+    try {
+      setPeriodLoading(true);
+      const today = getToday();
+      const commonParams: Record<string, string> = {};
+      if (funil) commonParams.funil = funil;
+      if (agente) commonParams.agente = agente;
+      if (team) commonParams.team = team;
+      if (group) commonParams.group = group;
+
+      const [mesRes, semanaRes, diaRes] = await Promise.all([
+        api.get<LossReasonsData>('/reports/loss-reasons', { params: { ...commonParams, from: getFirstOfMonth(), to: today } }),
+        api.get<LossReasonsData>('/reports/loss-reasons', { params: { ...commonParams, from: getMondayOfWeek(), to: today } }),
+        api.get<LossReasonsData>('/reports/loss-reasons', { params: { ...commonParams, from: today, to: today } }),
+      ]);
+
+      setPeriodData({
+        mes: { total: mesRes.data.totalPerdidos, pct: mesRes.data.pctPerdidos },
+        semana: { total: semanaRes.data.totalPerdidos, pct: semanaRes.data.pctPerdidos },
+        dia: { total: diaRes.data.totalPerdidos, pct: diaRes.data.pctPerdidos },
+      });
+    } catch (err) {
+      console.error('[LossReasonsPage] Erro ao carregar períodos:', err);
+    } finally {
+      setPeriodLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchData(from, to, selectedFunil, selectedAgente, teamFilter, groupFilter);
   }, [from, to, selectedFunil, selectedAgente, teamFilter, groupFilter, fetchData]);
+
+  useEffect(() => {
+    fetchPeriods(selectedFunil, selectedAgente, teamFilter, groupFilter);
+  }, [selectedFunil, selectedAgente, teamFilter, groupFilter, fetchPeriods]);
 
   const funis = data?.funis ?? [];
   const agentes = data?.agentes ?? [];
@@ -130,14 +189,63 @@ export function LossReasonsPage() {
         <TagFilter />
       </div>
 
-      {/* KPI Card */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      {/* KPI Cards — 4 rows of 2 */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <KPICard
           label="Total Perdidos"
           value={data?.totalPerdidos}
           icon={XCircle}
           accent="danger"
           loading={loading}
+        />
+        <KPICard
+          label="% Leads Perdidos"
+          value={data?.pctPerdidos}
+          icon={Percent}
+          accent="danger"
+          loading={loading}
+        />
+        <KPICard
+          label="Perdidos Mês"
+          value={periodData.mes?.total}
+          icon={Calendar}
+          accent="warning"
+          loading={periodLoading}
+        />
+        <KPICard
+          label="% Perdidos Mês"
+          value={periodData.mes?.pct}
+          icon={Percent}
+          accent="warning"
+          loading={periodLoading}
+        />
+        <KPICard
+          label="Perdidos Semana"
+          value={periodData.semana?.total}
+          icon={CalendarRange}
+          accent="info"
+          loading={periodLoading}
+        />
+        <KPICard
+          label="% Perdidos Semana"
+          value={periodData.semana?.pct}
+          icon={Percent}
+          accent="info"
+          loading={periodLoading}
+        />
+        <KPICard
+          label="Perdidos Dia"
+          value={periodData.dia?.total}
+          icon={CalendarDays}
+          accent="primary"
+          loading={periodLoading}
+        />
+        <KPICard
+          label="% Perdidos Dia"
+          value={periodData.dia?.pct}
+          icon={Percent}
+          accent="primary"
+          loading={periodLoading}
         />
       </div>
 

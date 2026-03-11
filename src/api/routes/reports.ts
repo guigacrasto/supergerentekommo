@@ -633,6 +633,30 @@ export function reportsRouter() {
 
       const totalPerdidos = lostLeads.length;
 
+      // Count total resolved leads (won + lost) for percentage calculation
+      const STATUS_WON = 142;
+      let totalResolvedLeads = 0;
+      for (const { team: t, metrics: m } of allMetrics) {
+        if (teamFilter && t !== teamFilter) continue;
+        for (const lead of m.leadSnapshots) {
+          if (lead.closed_at < fromTs || lead.closed_at > toTs) continue;
+          if (lead.status_id !== STATUS_LOST && lead.status_id !== STATUS_WON) continue;
+          if (funilFilter) {
+            const pName = (pipelineNamesMap[lead.pipeline_id] || "").replace(/^FUNIL\s+/i, "");
+            if (pName !== funilFilter) continue;
+          }
+          if (agenteFilter) {
+            const agentName = userNamesMap[lead.responsible_user_id] || "";
+            if (agentName !== agenteFilter) continue;
+          }
+          if (groupUserIds && !groupUserIds.has(lead.responsible_user_id)) continue;
+          totalResolvedLeads++;
+        }
+      }
+      const pctPerdidos = totalResolvedLeads > 0
+        ? ((totalPerdidos / totalResolvedLeads) * 100).toFixed(1) + "%"
+        : "0.0%";
+
       // Group by motivo
       const motivosMap: Record<string, number> = {};
       for (const lead of lostLeads) {
@@ -677,7 +701,7 @@ export function reportsRouter() {
       const funis = Array.from(allFunilNames).sort();
       const agentes = Array.from(allAgentNames).sort();
 
-      res.json({ motivos, porAgente, totalPerdidos, funis, agentes, grupos: Array.from(allGroups).sort() });
+      res.json({ motivos, porAgente, totalPerdidos, pctPerdidos, funis, agentes, grupos: Array.from(allGroups).sort() });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
