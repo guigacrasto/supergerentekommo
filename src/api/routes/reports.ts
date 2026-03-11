@@ -865,8 +865,11 @@ export function reportsRouter() {
         // Standalone "mil" → 1000
         if (/^\s*(um\s+)?mil\s*$/i.test(s)) return 1000;
 
-        // Strip currency symbols, spaces: "R$ 5.000" → "5.000"
-        let digits = raw.replace(/[r$\s]/gi, "").trim();
+        // Strip currency symbols, "reais", "real", "brl", spaces: "R$ 3.000 reais" → "3.000"
+        let digits = raw
+          .replace(/reais|real|brl/gi, "")
+          .replace(/[r$\s]/gi, "")
+          .trim();
 
         return parseSimpleNumber(digits);
       }
