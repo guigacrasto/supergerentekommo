@@ -181,6 +181,39 @@ async function fetchActivity(
     })
     .map(mapLead);
 
+  // Auto-close DDD Proibido leads as lost in Kommo
+  if (leadsDDDProibido.length > 0) {
+    const lossReasonId = Object.entries(crmMetrics.lossReasonNames)
+      .find(([, name]) => /ddd\s*proibido/i.test(name))?.[0];
+
+    const reasonId = lossReasonId ? Number(lossReasonId) : undefined;
+
+    console.log(
+      `[ActivityCache:${team}] Fechando ${leadsDDDProibido.length} leads DDD proibido como venda perdida (loss_reason_id=${reasonId ?? 'N/A'})...`
+    );
+
+    // Close leads in parallel (max 5 at a time to avoid rate limits)
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < leadsDDDProibido.length; i += BATCH_SIZE) {
+      const batch = leadsDDDProibido.slice(i, i + BATCH_SIZE);
+      const results = await Promise.allSettled(
+        batch.map(async (lead) => {
+          const closed = await service.closeLeadAsLost(lead.id, reasonId);
+          if (closed) {
+            try {
+              await service.addNote(lead.id, `[SuperGerente] Lead fechado automaticamente — DDD Proibido`);
+            } catch { /* note is optional */ }
+          }
+          return closed;
+        })
+      );
+      const closedCount = results.filter((r) => r.status === "fulfilled" && r.value).length;
+      if (closedCount > 0) {
+        console.log(`[ActivityCache:${team}] ${closedCount}/${batch.length} leads DDD proibido fechados com sucesso`);
+      }
+    }
+  }
+
   console.log(
     `[ActivityCache:${team}] ${leadsAbandonados48h.length} abandonados, ${leadsEmRisco7d.length} em risco, ${tarefasVencidas.length} tarefas vencidas, ${leadsDDDProibido.length} DDD proibido`
   );

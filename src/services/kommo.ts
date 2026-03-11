@@ -334,6 +334,18 @@ export class KommoService {
         }
     }
 
+    public async closeLeadAsLost(leadId: number, lossReasonId?: number): Promise<boolean> {
+        try {
+            const body: any = { id: leadId, status_id: 143 };
+            if (lossReasonId) body.loss_reason_id = lossReasonId;
+            await this.client.patch("/leads", [body]);
+            return true;
+        } catch (error: any) {
+            console.error(`[Kommo] Erro ao fechar lead ${leadId} como perdido:`, error.message);
+            return false;
+        }
+    }
+
     public async getLossReasons(): Promise<Array<{ id: number; name: string }>> {
         try {
             const response = await this.client.get("/leads/loss_reasons");
