@@ -116,6 +116,9 @@ export function reportsRouter() {
 
   // GET /api/reports/agents — performance de agentes de todas as equipes autorizadas
   router.get("/agents", async (req: AuthRequest, res) => {
+    const teamFilter = typeof req.query.team === "string" ? req.query.team : "";
+    const groupFilter = typeof req.query.group === "string" ? req.query.group : "";
+
     try {
       const byAgent: Record<string, {
         Agente: string;
@@ -125,10 +128,21 @@ export function reportsRouter() {
         funnels: Record<string, number>;
       }> = {};
 
-      const allMetrics = await getFilteredMetrics(req);
+      let allMetrics = await getFilteredMetrics(req);
+      if (teamFilter) {
+        allMetrics = allMetrics.filter(({ team }) => team === teamFilter);
+      }
+
+      const { groupUserIds, allGroups } = buildGroupFilter(allMetrics, groupFilter, req.allowedGroups || {});
 
       for (const { metrics } of allMetrics) {
         for (const v of metrics.vendedores) {
+          // Apply group filter: look up userId for this agent
+          if (groupUserIds) {
+            const uid = Object.entries(metrics.userNames).find(([, name]) => name === v.nome)?.[0];
+            if (uid && !groupUserIds.has(Number(uid))) continue;
+          }
+
           if (!byAgent[v.nome]) {
             byAgent[v.nome] = { Agente: v.nome, "Total Leads": 0, _won: 0, _lost: 0, funnels: {} };
           }
@@ -156,7 +170,7 @@ export function reportsRouter() {
           };
         });
 
-      res.json(rows);
+      res.json({ rows, grupos: Array.from(allGroups).sort() });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
