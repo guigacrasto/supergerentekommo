@@ -172,14 +172,58 @@ async function fetchActivity(
     return null;
   }
 
+  // Debug: count phone resolution sources
+  let debugPhoneFromLead = 0;
+  let debugPhoneFromContact = 0;
+  let debugNoPhone = 0;
+
   const leadsDDDProibido: AlertLead[] = activeLeads
     .filter((l) => {
-      const phone = getPhoneFromLead(l.id);
-      if (!phone) return false;
+      const cfValues = snapshotCfMap.get(l.id);
+      let phone: string | null = null;
+      let source = "none";
+
+      // 1. Check lead custom fields
+      if (cfValues) {
+        for (const cf of cfValues) {
+          if (cf.field_code === "PHONE" || /phone|telefone|celular/i.test(cf.field_name || "")) {
+            phone = cf.values?.[0]?.value?.toString() || null;
+            if (phone) { source = "lead_cf"; break; }
+          }
+        }
+      }
+
+      // 2. Check contact custom fields
+      if (!phone) {
+        const contactCfs = crmMetrics.contactCfByLead[l.id];
+        if (contactCfs) {
+          for (const cf of contactCfs) {
+            if (cf.field_code === "PHONE" || /phone|telefone|celular/i.test(cf.field_name || "")) {
+              phone = cf.values?.[0]?.value?.toString() || null;
+              if (phone) { source = "contact_cf"; break; }
+            }
+          }
+        }
+      }
+
+      if (!phone) { debugNoPhone++; return false; }
+      if (source === "lead_cf") debugPhoneFromLead++;
+      else debugPhoneFromContact++;
+
       const ddd = extractDDD(phone);
-      return ddd !== null && FORBIDDEN_DDDS.has(ddd);
+      const isForbidden = ddd !== null && FORBIDDEN_DDDS.has(ddd);
+
+      if (isForbidden) {
+        console.log(`[ActivityCache:${team}] DDD Proibido detectado: lead ${l.id} "${l.titulo}" — phone=${phone} ddd=${ddd} source=${source}`);
+      }
+
+      return isForbidden;
     })
     .map(mapLead);
+
+  console.log(
+    `[ActivityCache:${team}] Phones: ${debugPhoneFromLead} from lead, ${debugPhoneFromContact} from contact, ${debugNoPhone} sem telefone. Total activeLeads: ${activeLeads.length}, contactCfByLead keys: ${Object.keys(crmMetrics.contactCfByLead).length}`
+  );
 
   // Auto-close DDD Proibido leads as lost in Kommo
   if (leadsDDDProibido.length > 0) {
