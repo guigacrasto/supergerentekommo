@@ -184,14 +184,31 @@ export function TMFPage() {
       <div className="rounded-card border border-glass-border bg-surface/60 backdrop-blur-glass p-4">
         <div className="flex items-start gap-3">
           <Info className="h-5 w-5 text-accent-blue mt-0.5 flex-shrink-0" />
-          <div className="flex flex-col gap-1.5 text-body-sm">
-            <p className="text-foreground font-medium">Regras de Classificação de Leads</p>
+          <div className="flex flex-col gap-2 text-body-sm w-full">
+            <p className="text-foreground font-medium">Regras de Classificação — Vendas do Dia</p>
             <p className="text-muted">
-              <span className="text-success font-medium">Leads Dia</span> — Leads fechados em até 24 horas após a criação. Representam vendas rápidas, fechadas no mesmo dia.
+              <span className="text-success font-medium">BT dia</span> — Vendas fechadas no mesmo dia útil (com corte às 17h BRT).
             </p>
             <p className="text-muted">
-              <span className="text-warning font-medium">Leads Remarketing</span> — Leads que levaram mais de 24 horas para fechar. Passaram por follow-up ou remarketing antes da conversão.
+              <span className="text-warning font-medium">BT rmkt</span> — Vendas que levaram mais de 1 dia útil para fechar (remarketing).
             </p>
+            <div className="overflow-x-auto mt-1">
+              <table className="text-body-sm text-muted border-collapse">
+                <thead>
+                  <tr>
+                    <th className="border border-glass-border px-3 py-1.5 text-left font-medium text-foreground">Quando fecha</th>
+                    <th className="border border-glass-border px-3 py-1.5 text-left font-medium text-foreground">Conta como dia útil de</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td className="border border-glass-border px-3 py-1.5">Seg–Sex antes 17h</td><td className="border border-glass-border px-3 py-1.5">Mesmo dia</td></tr>
+                  <tr><td className="border border-glass-border px-3 py-1.5">Seg–Sex após 17h</td><td className="border border-glass-border px-3 py-1.5">Dia seguinte</td></tr>
+                  <tr><td className="border border-glass-border px-3 py-1.5">Sábado antes 17h</td><td className="border border-glass-border px-3 py-1.5">Sábado</td></tr>
+                  <tr><td className="border border-glass-border px-3 py-1.5">Sábado após 17h</td><td className="border border-glass-border px-3 py-1.5">Segunda</td></tr>
+                  <tr><td className="border border-glass-border px-3 py-1.5">Domingo</td><td className="border border-glass-border px-3 py-1.5">Segunda</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
@@ -206,28 +223,28 @@ export function TMFPage() {
           loading={loading}
         />
         <KPICard
-          label="Leads Dia"
+          label="BT dia"
           value={data?.totalFechamentoDia}
           icon={Zap}
           accent="success"
           loading={loading}
         />
         <KPICard
-          label="% Leads Dia"
+          label="% BT dia"
           value={data?.pctFechamentoDia}
           icon={Percent}
           accent="success"
           loading={loading}
         />
         <KPICard
-          label="Leads Remarketing"
+          label="BT rmkt"
           value={data?.totalRemarketing}
           icon={RefreshCw}
           accent="warning"
           loading={loading}
         />
         <KPICard
-          label="% Remarketing"
+          label="% BT rmkt"
           value={data?.pctRemarketing}
           icon={Percent}
           accent="info"
@@ -235,7 +252,7 @@ export function TMFPage() {
         />
       </div>
 
-      {/* Summary Table — LEADS dia / LEADS rmkt por DIA, SEMANA, MÊS */}
+      {/* Summary Table — BT dia / BT rmkt por DIA, SEMANA, MÊS */}
       <div className="overflow-x-auto rounded-card border border-glass-border bg-surface">
         <table className="w-full">
           <thead>
@@ -249,7 +266,7 @@ export function TMFPage() {
           <tbody>
             <tr className="hover:bg-surface-secondary/50 transition-colors">
               <td className="border-t border-glass-border px-4 py-3 text-body-md text-success font-medium">
-                LEADS dia
+                BT dia
               </td>
               {summaryLoading ? (
                 <>
@@ -273,7 +290,7 @@ export function TMFPage() {
             </tr>
             <tr className="hover:bg-surface-secondary/50 transition-colors">
               <td className="border-t border-glass-border px-4 py-3 text-body-md text-warning font-medium">
-                LEADS rmkt
+                BT rmkt
               </td>
               {summaryLoading ? (
                 <>
@@ -305,8 +322,8 @@ export function TMFPage() {
           <thead>
             <tr className="bg-surface-secondary text-muted text-body-sm">
               <th className="px-4 py-3 text-left font-medium">Nome</th>
-              <th className="px-4 py-3 text-right font-medium">Leads Dia</th>
-              <th className="px-4 py-3 text-right font-medium">Leads Rmkt</th>
+              <th className="px-4 py-3 text-right font-medium">BT dia</th>
+              <th className="px-4 py-3 text-right font-medium">BT rmkt</th>
               <th className="px-4 py-3 text-right font-medium">TMF</th>
             </tr>
           </thead>
