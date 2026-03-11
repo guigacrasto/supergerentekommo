@@ -732,11 +732,70 @@ export function reportsRouter() {
     }
   });
 
+  // GET /api/reports/custom-fields-debug — list all unique custom field names across leads and contacts
+  router.get("/custom-fields-debug", async (req: AuthRequest, res) => {
+    try {
+      const allMetrics = await getFilteredMetrics(req);
+
+      const leadFieldCounts: Record<string, number> = {};
+      const contactFieldCounts: Record<string, number> = {};
+      let totalLeads = 0;
+      let leadsWithCf = 0;
+      let leadsWithContactCf = 0;
+
+      // Sample renda values (first 50 unique)
+      const rendaPattern = /renda|sal[aá]rio|income|faixa.*sal|receita/i;
+      const rendaSamples: Array<{ leadId: number; fieldName: string; value: string; source: string }> = [];
+
+      for (const { metrics } of allMetrics) {
+        for (const lead of metrics.leadSnapshots) {
+          totalLeads++;
+          if (lead.custom_fields_values && lead.custom_fields_values.length > 0) {
+            leadsWithCf++;
+            for (const cf of lead.custom_fields_values) {
+              const name = cf.field_name || cf.field_code || "unknown";
+              leadFieldCounts[name] = (leadFieldCounts[name] || 0) + 1;
+              if (rendaPattern.test(name) && rendaSamples.length < 50) {
+                rendaSamples.push({ leadId: lead.id, fieldName: name, value: cf.values?.[0]?.value?.toString() || "", source: "lead" });
+              }
+            }
+          }
+          const contactCfs = metrics.contactCfByLead[lead.id];
+          if (contactCfs && contactCfs.length > 0) {
+            leadsWithContactCf++;
+            for (const cf of contactCfs) {
+              const name = cf.field_name || cf.field_code || "unknown";
+              contactFieldCounts[name] = (contactFieldCounts[name] || 0) + 1;
+              if (rendaPattern.test(name) && rendaSamples.length < 50) {
+                rendaSamples.push({ leadId: lead.id, fieldName: name, value: cf.values?.[0]?.value?.toString() || "", source: "contact" });
+              }
+            }
+          }
+        }
+      }
+
+      // Sort by count descending
+      const leadFields = Object.entries(leadFieldCounts).sort((a, b) => b[1] - a[1]);
+      const contactFields = Object.entries(contactFieldCounts).sort((a, b) => b[1] - a[1]);
+
+      res.json({
+        totalLeads,
+        leadsWithCustomFields: leadsWithCf,
+        leadsWithContactCustomFields: leadsWithContactCf,
+        leadFields: leadFields.map(([name, count]) => ({ name, count })),
+        contactFields: contactFields.map(([name, count]) => ({ name, count })),
+        rendaSamples,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // GET /api/reports/income?from=YYYY-MM-DD&to=YYYY-MM-DD — Renda do Lead
   router.get("/income", async (req: AuthRequest, res) => {
     const { fromTs, toTs } = parseDateRange(req.query);
     const STATUS_WON = 142;
-    const rendaPattern = /renda/i;
+    const rendaPattern = /renda|sal[aá]rio|income|faixa.*sal|receita/i;
     const teamFilter = typeof req.query.team === "string" ? req.query.team : "";
     const groupFilter = typeof req.query.group === "string" ? req.query.group : "";
     const funilFilter = typeof req.query.funil === "string" ? req.query.funil : "";
@@ -956,7 +1015,7 @@ export function reportsRouter() {
   router.get("/profession", async (req: AuthRequest, res) => {
     const { fromTs, toTs } = parseDateRange(req.query);
     const STATUS_WON = 142;
-    const profissaoPattern = /profiss[aã]o/i;
+    const profissaoPattern = /profiss[aã]o|ocupa[cç][aã]o|cargo|profession|job/i;
     const teamFilter = typeof req.query.team === "string" ? req.query.team : "";
     const groupFilter = typeof req.query.group === "string" ? req.query.group : "";
     const funilFilter = typeof req.query.funil === "string" ? req.query.funil : "";
