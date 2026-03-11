@@ -38,7 +38,7 @@ const NAV_ITEMS = [
   { to: '/renda', label: 'Renda', icon: DollarSign },
   { to: '/profissao', label: 'Profissão', icon: Briefcase },
   { to: '/ddd', label: 'DDD', icon: Phone },
-  { to: '/predictions', label: 'Previsões', icon: TrendingUp },
+  { to: '/predictions', label: 'Previsões (BETA)', icon: TrendingUp },
   { to: '/chat', label: 'Chat IA', icon: MessageSquare },
   { to: '/agents', label: 'Agentes', icon: Headset },
   { to: '/alerts', label: 'Alertas', icon: AlertTriangle },

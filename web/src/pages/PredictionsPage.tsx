@@ -140,9 +140,14 @@ export function PredictionsPage() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="font-heading text-heading-md">Previsão de Vendas</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="font-heading text-heading-md">Previsão de Vendas</h1>
+            <span className="inline-flex items-center rounded-badge bg-warning/15 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-warning">
+              Beta
+            </span>
+          </div>
           <p className="mt-1 text-body-md text-muted">
-            Score de probabilidade de fechamento por lead ativo
+            Score de probabilidade de fechamento por lead ativo — <span className="text-warning">funcionalidade em fase de testes</span>
           </p>
           {atualizadoEm && (
             <p className="text-body-sm text-muted mt-1">

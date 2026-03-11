@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { CalendarDays } from 'lucide-react';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import { useFilterStore } from '@/stores/filterStore';
@@ -60,6 +61,92 @@ const ACCENT_COLORS: Record<string, string> = {
   'Acima de R$ 20.000': 'border-l-danger',
   'Não informado': 'border-l-muted',
 };
+
+const PIE_COLORS: Record<string, string> = {
+  'Até R$ 2.000': '#22C55E',
+  'R$ 2.001 a R$ 5.000': '#3B82F6',
+  'R$ 5.001 a R$ 10.000': '#9566F2',
+  'R$ 10.001 a R$ 20.000': '#F59E0B',
+  'Acima de R$ 20.000': '#EF4444',
+  'Não informado': '#64748B',
+};
+
+interface PieSlice {
+  name: string;
+  value: number;
+}
+
+function buildPieData(rows: IncomeRow[] | null): PieSlice[] {
+  if (!rows) return [];
+  return rows
+    .filter((r) => r.volume > 0)
+    .map((r) => ({ name: r.faixa, value: r.volume }));
+}
+
+function IncomePieChart({ title, data, loading: isLoading }: { title: string; data: PieSlice[]; loading: boolean }) {
+  const total = data.reduce((s, d) => s + d.value, 0);
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center gap-2 rounded-card border border-glass-border bg-surface p-4">
+        <span className="text-[10px] uppercase tracking-wider text-muted font-medium">{title}</span>
+        <Skeleton className="h-[140px] w-[140px] rounded-full" />
+      </div>
+    );
+  }
+
+  if (total === 0) {
+    return (
+      <div className="flex flex-col items-center gap-2 rounded-card border border-glass-border bg-surface p-4">
+        <span className="text-[10px] uppercase tracking-wider text-muted font-medium">{title}</span>
+        <div className="flex h-[140px] w-[140px] items-center justify-center">
+          <span className="text-body-sm text-muted">Sem dados</span>
+        </div>
+        <span className="text-lg font-heading font-bold text-foreground">0</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-1 rounded-card border border-glass-border bg-surface p-4">
+      <span className="text-[10px] uppercase tracking-wider text-muted font-medium">{title}</span>
+      <div className="h-[140px] w-[140px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={data}
+              cx="50%"
+              cy="50%"
+              innerRadius={35}
+              outerRadius={65}
+              dataKey="value"
+              stroke="none"
+              paddingAngle={2}
+            >
+              {data.map((entry) => (
+                <Cell key={entry.name} fill={PIE_COLORS[entry.name] || '#64748B'} />
+              ))}
+            </Pie>
+            <Tooltip
+              contentStyle={{
+                backgroundColor: '#22182D',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '8px',
+                fontSize: '12px',
+                color: '#E0E3E9',
+              }}
+              formatter={(value: number | undefined, name: string | undefined) => [
+                `${value ?? 0} (${((Number(value ?? 0) / total) * 100).toFixed(1)}%)`,
+                name ?? '',
+              ]}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+      <span className="text-lg font-heading font-bold text-foreground">{total.toLocaleString('pt-BR')}</span>
+    </div>
+  );
+}
 
 export function RendaPage() {
   const user = useAuthStore((s) => s.user);
@@ -171,6 +258,26 @@ export function RendaPage() {
         <FunilFilter funis={funis} />
         <TagFilter />
       </div>
+
+      {/* Pie Charts: TOTAL | MÊS | SEMANA | DIA */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <IncomePieChart title="Total" data={buildPieData(faixas)} loading={loading} />
+        <IncomePieChart title="Mês" data={buildPieData(periodData.mes)} loading={periodLoading} />
+        <IncomePieChart title="Semana" data={buildPieData(periodData.semana)} loading={periodLoading} />
+        <IncomePieChart title="Dia" data={buildPieData(periodData.dia)} loading={periodLoading} />
+      </div>
+
+      {/* Legenda */}
+      {!loading && (
+        <div className="flex flex-wrap items-center gap-3">
+          {faixas.filter((f) => f.volume > 0).map((f) => (
+            <div key={f.faixa} className="flex items-center gap-1.5">
+              <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: PIE_COLORS[f.faixa] || '#64748B' }} />
+              <span className="text-body-xs text-muted">{f.faixa}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Per-bracket KPI rows: TOTAL | MÊS | SEMANA | DIA */}
       {loading ? (
