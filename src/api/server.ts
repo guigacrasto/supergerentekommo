@@ -61,6 +61,81 @@ export function createServer() {
   // Auth routes (mostly public)
   app.use("/api/auth", authRouter());
 
+  // Temporary debug endpoint (public) — remove after diagnosing "Não informado"
+  app.get("/api/debug/custom-fields", async (_req, res) => {
+    try {
+      const { getTeamConfigsFromTenant } = await import("../config.js");
+      const { getCrmMetrics } = await import("./cache/crm-cache.js");
+      const { KommoService } = await import("../services/kommo.js");
+
+      const teamConfigs = getTeamConfigsFromTenant();
+      const rendaPattern = /renda|sal[aá]rio|income|faixa.*sal|receita/i;
+      const profPattern = /profiss[aã]o|ocupa[cç][aã]o|cargo|profession|job/i;
+
+      const result: any = { teams: [] };
+
+      for (const [teamKey, tc] of Object.entries(teamConfigs)) {
+        if (!tc.subdomain) continue;
+        const service = new KommoService(tc, teamKey);
+        const metrics = await getCrmMetrics(teamKey, service);
+
+        const leadFieldCounts: Record<string, number> = {};
+        const contactFieldCounts: Record<string, number> = {};
+        let totalLeads = 0;
+        let leadsWithCf = 0;
+        let leadsWithContactCf = 0;
+        const rendaSamples: any[] = [];
+        const profSamples: any[] = [];
+
+        for (const lead of metrics.leadSnapshots) {
+          totalLeads++;
+          if (lead.custom_fields_values && lead.custom_fields_values.length > 0) {
+            leadsWithCf++;
+            for (const cf of lead.custom_fields_values) {
+              const name = cf.field_name || cf.field_code || "unknown";
+              leadFieldCounts[name] = (leadFieldCounts[name] || 0) + 1;
+              if (rendaPattern.test(name) && rendaSamples.length < 30) {
+                rendaSamples.push({ leadId: lead.id, field: name, value: cf.values?.[0]?.value, source: "lead" });
+              }
+              if (profPattern.test(name) && profSamples.length < 30) {
+                profSamples.push({ leadId: lead.id, field: name, value: cf.values?.[0]?.value, source: "lead" });
+              }
+            }
+          }
+          const contactCfs = metrics.contactCfByLead[lead.id];
+          if (contactCfs && contactCfs.length > 0) {
+            leadsWithContactCf++;
+            for (const cf of contactCfs) {
+              const name = cf.field_name || cf.field_code || "unknown";
+              contactFieldCounts[name] = (contactFieldCounts[name] || 0) + 1;
+              if (rendaPattern.test(name) && rendaSamples.length < 30) {
+                rendaSamples.push({ leadId: lead.id, field: name, value: cf.values?.[0]?.value, source: "contact" });
+              }
+              if (profPattern.test(name) && profSamples.length < 30) {
+                profSamples.push({ leadId: lead.id, field: name, value: cf.values?.[0]?.value, source: "contact" });
+              }
+            }
+          }
+        }
+
+        result.teams.push({
+          team: teamKey,
+          totalLeads,
+          leadsWithCf,
+          leadsWithContactCf,
+          leadFields: Object.entries(leadFieldCounts).sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count })),
+          contactFields: Object.entries(contactFieldCounts).sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count })),
+          rendaSamples,
+          profSamples,
+        });
+      }
+
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // All below require auth
   app.use("/api/pipelines", requireAuth as any, pipelinesRouter());
   app.use("/api/leads", requireAuth as any, leadsRouter());
