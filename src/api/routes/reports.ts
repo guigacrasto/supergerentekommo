@@ -818,6 +818,7 @@ export function reportsRouter() {
         status_id: number;
         price: number;
         renda: string | null;
+        wonInRange: boolean;
       }> = [];
       let pipelineNamesMap: Record<number, string> = {};
       const allFunilNames = new Set<string>();
@@ -828,29 +829,20 @@ export function reportsRouter() {
         for (const v of metrics.vendedores) {
           allFunilNames.add(v.funil.replace(/^FUNIL\s+/i, ""));
         }
-        let teamTotal = 0;
-        let teamInRange = 0;
-        let teamGroupFiltered = 0;
         for (const lead of metrics.leadSnapshots) {
-          teamTotal++;
-          if (lead.created_at >= fromTs && lead.created_at <= toTs) {
-            teamInRange++;
-            if (groupUserIds && !groupUserIds.has(lead.responsible_user_id)) {
-              teamGroupFiltered++;
-              continue;
-            }
-            if (funilFilter) {
-              const pName = (pipelineNamesMap[lead.pipeline_id] || "").replace(/^FUNIL\s+/i, "");
-              if (pName !== funilFilter) continue;
-            }
-            leads.push({
-              status_id: lead.status_id,
-              price: lead.price || 0,
-              renda: getCustomFieldValueWithContacts(lead, rendaPattern, metrics.contactCfByLead),
-            });
+          if (groupUserIds && !groupUserIds.has(lead.responsible_user_id)) continue;
+          if (funilFilter) {
+            const pName = (pipelineNamesMap[lead.pipeline_id] || "").replace(/^FUNIL\s+/i, "");
+            if (pName !== funilFilter) continue;
           }
+          const isWonInRange = lead.status_id === STATUS_WON && lead.closed_at >= fromTs && lead.closed_at <= toTs;
+          leads.push({
+            status_id: lead.status_id,
+            price: lead.price || 0,
+            renda: getCustomFieldValueWithContacts(lead, rendaPattern, metrics.contactCfByLead),
+            wonInRange: isWonInRange,
+          });
         }
-        console.log(`[Income:${team}] snapshots=${teamTotal}, inDateRange(${req.query.from}→${req.query.to})=${teamInRange}, groupFiltered=${teamGroupFiltered}, collected=${leads.length}, contactCfByLead=${Object.keys(metrics.contactCfByLead).length}`);
       }
 
       // Initialize brackets + "Não informado"
@@ -981,7 +973,7 @@ export function reportsRouter() {
         }
 
         faixasMap[bracketLabel].volume++;
-        if (lead.status_id === STATUS_WON) {
+        if (lead.wonInRange) {
           faixasMap[bracketLabel].fechamentos++;
           faixasMap[bracketLabel].totalPrice += lead.price;
         }
