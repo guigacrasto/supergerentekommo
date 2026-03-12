@@ -290,7 +290,7 @@ export function reportsRouter() {
               allowedGroups: (req.allowedGroups || {})[team] || [],
               pausedPipelines, isAdmin,
             });
-            const activity = await getActivityMetrics(team, kommoService, filtered);
+            const activity = await getActivityMetrics(team, kommoService, filtered, { dddProibidoEnabled: req.tenant?.settings?.dddProibidoEnabled === true });
             const funis = Object.values(filtered.pipelineNames).sort();
             const agentes = [...new Set(filtered.vendedores.map((v) => v.nome))].sort();
             const grupos = [...new Set(Object.values(filtered.userGroups).filter(Boolean))].sort();
@@ -1292,7 +1292,7 @@ export function reportsRouter() {
 
           let activity = null;
           try {
-            activity = await getActivityMetrics(team, kommoService, metrics);
+            activity = await getActivityMetrics(team, kommoService, metrics, { dddProibidoEnabled: req.tenant?.settings?.dddProibidoEnabled === true });
           } catch {}
 
           // Map vendedores to include group name + filter by allowed groups
@@ -1411,7 +1411,7 @@ export function reportsRouter() {
             // Activity
             let activity = null;
             try {
-              activity = await getActivityMetrics(team, kommoService, metrics);
+              activity = await getActivityMetrics(team, kommoService, metrics, { dddProibidoEnabled: req.tenant?.settings?.dddProibidoEnabled === true });
             } catch {}
 
             // Map vendedores + filter by allowed groups

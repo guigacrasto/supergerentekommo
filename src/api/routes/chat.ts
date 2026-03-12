@@ -154,7 +154,7 @@ export function chatRouter() {
             const cfg = teamConfigs[t];
             const kommoService = new KommoService(cfg, t, authReq.tenantId);
             const crmMetrics = await getCrmMetrics(t, kommoService, authReq.tenantId, cfg.excludePipelineNames);
-            const activity = await getActivityMetrics(t, kommoService, crmMetrics);
+            const activity = await getActivityMetrics(t, kommoService, crmMetrics, { dddProibidoEnabled: authReq.tenant?.settings?.dddProibidoEnabled === true });
             return { team: t, label: cfg.label, crmMetrics, activity };
           })
       );

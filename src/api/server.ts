@@ -13,6 +13,7 @@ import { adminRouter } from "./routes/admin.js";
 import { webhooksRouter } from "./routes/webhooks.js";
 import { notificationsRouter } from "./routes/notifications.js";
 import { superRouter } from "./routes/super.js";
+import { metricasRouter } from "./routes/metricas.js";
 import { requireAuth } from "./middleware/requireAuth.js";
 import { isCacheReady, getTokenStatuses } from "./readiness.js";
 import { auditLog } from "./middleware/auditLog.js";
@@ -140,6 +141,7 @@ export function createServer() {
   app.use("/api/insights", requireAuth as any, insightsRouter());
   app.use("/api/admin", requireAuth as any, adminRouter());
   app.use("/api/notifications", notificationsRouter());
+  app.use("/api/metricas", requireAuth as any, metricasRouter());
   app.use("/api/super", requireAuth as any, superRouter);
 
   const webPath = join(__dirname, "../../web/dist");

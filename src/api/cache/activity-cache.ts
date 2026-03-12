@@ -46,7 +46,8 @@ const activityCaches = new Map<string, ActivityCacheEntry>();
 async function fetchActivity(
   team: string,
   service: KommoService,
-  crmMetrics: CrmMetrics
+  crmMetrics: CrmMetrics,
+  options?: { dddProibidoEnabled?: boolean }
 ): Promise<ActivityMetrics> {
   console.log(`[ActivityCache:${team}] Buscando dados de atividade...`);
 
@@ -138,124 +139,111 @@ async function fetchActivity(
   }
 
   // DDD Proibido — leads ativos com telefone DDD 81, 87 ou 83
+  // Só roda quando explicitamente habilitado no tenant (dddProibidoEnabled: true)
+  const dddEnabled = options?.dddProibidoEnabled === true;
   const FORBIDDEN_DDDS = new Set(["81", "87", "83"]);
 
-  const snapshotCfMap = new Map<number, any[] | null>(
-    crmMetrics.leadSnapshots.map((s) => [s.id, s.custom_fields_values])
-  );
+  let leadsDDDProibido: AlertLead[] = [];
 
-  function getPhoneFromLead(leadId: number): string | null {
-    const cfValues = snapshotCfMap.get(leadId);
-    if (cfValues) {
-      for (const cf of cfValues) {
-        if (cf.field_code === "PHONE" || /phone|telefone|celular/i.test(cf.field_name || "")) {
-          const val = cf.values?.[0]?.value;
-          if (val) return val.toString();
-        }
-      }
+  if (dddEnabled) {
+    const snapshotCfMap = new Map<number, any[] | null>(
+      crmMetrics.leadSnapshots.map((s) => [s.id, s.custom_fields_values])
+    );
+
+    function extractDDD(phone: string): string | null {
+      const digits = phone.replace(/\D/g, "");
+      if (digits.startsWith("55") && digits.length >= 12) return digits.substring(2, 4);
+      if (digits.length >= 10 && digits.length <= 11) return digits.substring(0, 2);
+      return null;
     }
-    const contactCfs = crmMetrics.contactCfByLead[leadId];
-    if (!contactCfs) return null;
-    for (const cf of contactCfs) {
-      if (cf.field_code === "PHONE" || /phone|telefone|celular/i.test(cf.field_name || "")) {
-        const val = cf.values?.[0]?.value;
-        if (val) return val.toString();
-      }
-    }
-    return null;
-  }
 
-  function extractDDD(phone: string): string | null {
-    const digits = phone.replace(/\D/g, "");
-    if (digits.startsWith("55") && digits.length >= 12) return digits.substring(2, 4);
-    if (digits.length >= 10 && digits.length <= 11) return digits.substring(0, 2);
-    return null;
-  }
+    // Debug: count phone resolution sources
+    let debugPhoneFromLead = 0;
+    let debugPhoneFromContact = 0;
+    let debugNoPhone = 0;
 
-  // Debug: count phone resolution sources
-  let debugPhoneFromLead = 0;
-  let debugPhoneFromContact = 0;
-  let debugNoPhone = 0;
+    leadsDDDProibido = activeLeads
+      .filter((l) => {
+        const cfValues = snapshotCfMap.get(l.id);
+        let phone: string | null = null;
+        let source = "none";
 
-  const leadsDDDProibido: AlertLead[] = activeLeads
-    .filter((l) => {
-      const cfValues = snapshotCfMap.get(l.id);
-      let phone: string | null = null;
-      let source = "none";
-
-      // 1. Check lead custom fields
-      if (cfValues) {
-        for (const cf of cfValues) {
-          if (cf.field_code === "PHONE" || /phone|telefone|celular/i.test(cf.field_name || "")) {
-            phone = cf.values?.[0]?.value?.toString() || null;
-            if (phone) { source = "lead_cf"; break; }
-          }
-        }
-      }
-
-      // 2. Check contact custom fields
-      if (!phone) {
-        const contactCfs = crmMetrics.contactCfByLead[l.id];
-        if (contactCfs) {
-          for (const cf of contactCfs) {
+        // 1. Check lead custom fields
+        if (cfValues) {
+          for (const cf of cfValues) {
             if (cf.field_code === "PHONE" || /phone|telefone|celular/i.test(cf.field_name || "")) {
               phone = cf.values?.[0]?.value?.toString() || null;
-              if (phone) { source = "contact_cf"; break; }
+              if (phone) { source = "lead_cf"; break; }
             }
           }
         }
-      }
 
-      if (!phone) { debugNoPhone++; return false; }
-      if (source === "lead_cf") debugPhoneFromLead++;
-      else debugPhoneFromContact++;
+        // 2. Check contact custom fields
+        if (!phone) {
+          const contactCfs = crmMetrics.contactCfByLead[l.id];
+          if (contactCfs) {
+            for (const cf of contactCfs) {
+              if (cf.field_code === "PHONE" || /phone|telefone|celular/i.test(cf.field_name || "")) {
+                phone = cf.values?.[0]?.value?.toString() || null;
+                if (phone) { source = "contact_cf"; break; }
+              }
+            }
+          }
+        }
 
-      const ddd = extractDDD(phone);
-      const isForbidden = ddd !== null && FORBIDDEN_DDDS.has(ddd);
+        if (!phone) { debugNoPhone++; return false; }
+        if (source === "lead_cf") debugPhoneFromLead++;
+        else debugPhoneFromContact++;
 
-      if (isForbidden) {
-        console.log(`[ActivityCache:${team}] DDD Proibido detectado: lead ${l.id} "${l.titulo}" — phone=${phone} ddd=${ddd} source=${source}`);
-      }
+        const ddd = extractDDD(phone);
+        const isForbidden = ddd !== null && FORBIDDEN_DDDS.has(ddd);
 
-      return isForbidden;
-    })
-    .map(mapLead);
+        if (isForbidden) {
+          console.log(`[ActivityCache:${team}] DDD Proibido detectado: lead ${l.id} "${l.titulo}" — phone=${phone} ddd=${ddd} source=${source}`);
+        }
 
-  console.log(
-    `[ActivityCache:${team}] Phones: ${debugPhoneFromLead} from lead, ${debugPhoneFromContact} from contact, ${debugNoPhone} sem telefone. Total activeLeads: ${activeLeads.length}, contactCfByLead keys: ${Object.keys(crmMetrics.contactCfByLead).length}`
-  );
-
-  // Auto-close DDD Proibido leads as lost in Kommo
-  if (leadsDDDProibido.length > 0) {
-    const lossReasonId = Object.entries(crmMetrics.lossReasonNames)
-      .find(([, name]) => /ddd\s*proibido/i.test(name))?.[0];
-
-    const reasonId = lossReasonId ? Number(lossReasonId) : undefined;
+        return isForbidden;
+      })
+      .map(mapLead);
 
     console.log(
-      `[ActivityCache:${team}] Fechando ${leadsDDDProibido.length} leads DDD proibido como venda perdida (loss_reason_id=${reasonId ?? 'N/A'})...`
+      `[ActivityCache:${team}] Phones: ${debugPhoneFromLead} from lead, ${debugPhoneFromContact} from contact, ${debugNoPhone} sem telefone. Total activeLeads: ${activeLeads.length}, contactCfByLead keys: ${Object.keys(crmMetrics.contactCfByLead).length}`
     );
 
-    // Close leads in parallel (max 5 at a time to avoid rate limits)
-    const BATCH_SIZE = 5;
-    for (let i = 0; i < leadsDDDProibido.length; i += BATCH_SIZE) {
-      const batch = leadsDDDProibido.slice(i, i + BATCH_SIZE);
-      const results = await Promise.allSettled(
-        batch.map(async (lead) => {
-          const closed = await service.closeLeadAsLost(lead.id, reasonId);
-          if (closed) {
-            try {
-              await service.addNote(lead.id, `[SuperGerente] Lead fechado automaticamente — DDD Proibido`);
-            } catch { /* note is optional */ }
-          }
-          return closed;
-        })
+    // Auto-close DDD Proibido leads as lost in Kommo
+    if (leadsDDDProibido.length > 0) {
+      const lossReasonId = Object.entries(crmMetrics.lossReasonNames)
+        .find(([, name]) => /ddd\s*proibido/i.test(name))?.[0];
+
+      const reasonId = lossReasonId ? Number(lossReasonId) : undefined;
+
+      console.log(
+        `[ActivityCache:${team}] Fechando ${leadsDDDProibido.length} leads DDD proibido como venda perdida (loss_reason_id=${reasonId ?? 'N/A'})...`
       );
-      const closedCount = results.filter((r) => r.status === "fulfilled" && r.value).length;
-      if (closedCount > 0) {
-        console.log(`[ActivityCache:${team}] ${closedCount}/${batch.length} leads DDD proibido fechados com sucesso`);
+
+      // Close leads in parallel (max 5 at a time to avoid rate limits)
+      const BATCH_SIZE = 5;
+      for (let i = 0; i < leadsDDDProibido.length; i += BATCH_SIZE) {
+        const batch = leadsDDDProibido.slice(i, i + BATCH_SIZE);
+        const results = await Promise.allSettled(
+          batch.map(async (lead) => {
+            const closed = await service.closeLeadAsLost(lead.id, reasonId);
+            if (closed) {
+              try {
+                await service.addNote(lead.id, `[SuperGerente] Lead fechado automaticamente — DDD Proibido`);
+              } catch { /* note is optional */ }
+            }
+            return closed;
+          })
+        );
+        const closedCount = results.filter((r) => r.status === "fulfilled" && r.value).length;
+        if (closedCount > 0) {
+          console.log(`[ActivityCache:${team}] ${closedCount}/${batch.length} leads DDD proibido fechados com sucesso`);
+        }
       }
     }
+  } else {
+    console.log(`[ActivityCache:${team}] DDD Proibido desabilitado para este tenant`);
   }
 
   console.log(
@@ -274,7 +262,8 @@ async function fetchActivity(
 export async function getActivityMetrics(
   team: string,
   service: KommoService,
-  crmMetrics: CrmMetrics
+  crmMetrics: CrmMetrics,
+  options?: { dddProibidoEnabled?: boolean }
 ): Promise<ActivityMetrics> {
   let entry = activityCaches.get(team);
   if (!entry) {
@@ -286,7 +275,7 @@ export async function getActivityMetrics(
   if (entry.metrics && now < entry.expiresAt) return entry.metrics;
 
   if (entry.metrics && !entry.fetchPromise) {
-    entry.fetchPromise = fetchActivity(team, service, crmMetrics)
+    entry.fetchPromise = fetchActivity(team, service, crmMetrics, options)
       .then((metrics) => {
         entry.metrics = metrics;
         entry.expiresAt = Date.now() + ACTIVITY_CACHE_TTL_MS;
@@ -301,7 +290,7 @@ export async function getActivityMetrics(
   }
 
   if (!entry.fetchPromise) {
-    entry.fetchPromise = fetchActivity(team, service, crmMetrics)
+    entry.fetchPromise = fetchActivity(team, service, crmMetrics, options)
       .then((metrics) => {
         entry.metrics = metrics;
         entry.expiresAt = Date.now() + ACTIVITY_CACHE_TTL_MS;

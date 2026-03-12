@@ -32,6 +32,10 @@ export function stripFunilPrefix(name: string): string {
   return name.replace(/^FUNIL\s+/i, '');
 }
 
+export function formatCurrency(value: number): string {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+}
+
 export function buildTagParams(selectedTags: number[], tagMode: 'or' | 'and'): string {
   if (selectedTags.length === 0) return '';
   const params = new URLSearchParams();
