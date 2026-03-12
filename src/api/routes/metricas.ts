@@ -112,6 +112,7 @@ export function metricasRouter() {
       }
 
       const { from, to, fromTs, toTs } = parseDateRange(req.query);
+      console.log(`[metricas] summary: tenantId=${tenantId}, from=${from}, to=${to}, fromTs=${fromTs}, toTs=${toTs}`);
 
       // 1. Buscar entries manuais (gasto ads)
       const { data: entries } = await supabase
@@ -132,6 +133,7 @@ export function metricasRouter() {
 
       // 2. Buscar dados do Kommo via cache
       const teamConfigs = getTeamConfigsFromTenant(req.tenant);
+      console.log(`[metricas] teamConfigs keys: ${Object.keys(teamConfigs).join(', ')}, tenant has settings: ${!!req.tenant?.settings}`);
       const allSnapshots: Array<{
         id: number;
         created_at: number;
@@ -155,6 +157,8 @@ export function metricasRouter() {
           pipelineTeams[Number(pId)] = teamKey;
         }
 
+        console.log(`[metricas] team=${teamKey}: ${metrics.leadSnapshots.length} snapshots, ${Object.keys(metrics.pipelineNames).length} pipelines`);
+
         // Filter snapshots by date range
         for (const snap of metrics.leadSnapshots) {
           if (snap.created_at >= fromTs && snap.created_at <= toTs) {
@@ -164,6 +168,8 @@ export function metricasRouter() {
           }
         }
       }
+
+      console.log(`[metricas] allSnapshots after filter: ${allSnapshots.length}, spendMap: ${spendMap.size}`);
 
       // 3. Build daily rows per pipeline
       const WON_STATUS = 142;
