@@ -4,6 +4,7 @@ import { getCrmMetrics } from "../cache/crm-cache.js";
 import { KommoService } from "../../services/kommo.js";
 import { AuthRequest } from "../middleware/requireAuth.js";
 import { supabase } from "../supabase.js";
+import { filterCrmMetrics } from "../helpers/filter-metrics.js";
 
 export function metricasRouter() {
   const router = Router();
@@ -104,7 +105,6 @@ export function metricasRouter() {
       const tenantId = req.tenantId || req.userId;
 
       const { from, to, fromTs, toTs } = parseDateRange(req.query);
-      console.log(`[metricas] summary: tenantId=${tenantId || 'none'}, from=${from}, to=${to}, fromTs=${fromTs}, toTs=${toTs}`);
 
       // 1. Buscar entries manuais (gasto ads) — só se tiver tenant
       let entries: any[] = [];
@@ -127,9 +127,9 @@ export function metricasRouter() {
         });
       }
 
-      // 2. Buscar dados do Kommo via cache
+      // 2. Buscar dados do Kommo via cache (filtrado por permissões)
       const teamConfigs = getTeamConfigsFromTenant(req.tenant);
-      console.log(`[metricas] teamConfigs keys: ${Object.keys(teamConfigs).join(', ')}, tenant has settings: ${!!req.tenant?.settings}`);
+      const allowedFunnels = req.allowedFunnels || {};
       const allSnapshots: Array<{
         id: number;
         created_at: number;
@@ -144,7 +144,12 @@ export function metricasRouter() {
       for (const [teamKey, tc] of Object.entries(teamConfigs)) {
         if (!tc.subdomain) continue;
         const service = new KommoService(tc, teamKey, req.tenantId);
-        const metrics = await getCrmMetrics(teamKey, service, req.tenantId, tc.excludePipelineNames);
+        const raw = await getCrmMetrics(teamKey, service, req.tenantId, tc.excludePipelineNames);
+        const metrics = filterCrmMetrics(raw, {
+          allowedFunnels: allowedFunnels[teamKey] || [],
+          allowedGroups: (req.allowedGroups || {})[teamKey] || [],
+          pausedPipelines: req.pausedPipelines || [],
+        });
 
         Object.assign(pipelineNames, metrics.pipelineNames);
 
@@ -152,8 +157,6 @@ export function metricasRouter() {
         for (const pId of Object.keys(metrics.pipelineNames)) {
           pipelineTeams[Number(pId)] = teamKey;
         }
-
-        console.log(`[metricas] team=${teamKey}: ${metrics.leadSnapshots.length} snapshots, ${Object.keys(metrics.pipelineNames).length} pipelines`);
 
         // Filter snapshots by date range
         for (const snap of metrics.leadSnapshots) {
@@ -165,7 +168,6 @@ export function metricasRouter() {
         }
       }
 
-      console.log(`[metricas] allSnapshots after filter: ${allSnapshots.length}, spendMap: ${spendMap.size}`);
 
       // 3. Build daily rows per pipeline
       const WON_STATUS = 142;
