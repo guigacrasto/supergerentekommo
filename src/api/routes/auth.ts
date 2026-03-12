@@ -121,7 +121,7 @@ export function authRouter(): Router {
         role: profile.role,
         teams: profile.teams || [],
         tenantId: profile.tenant_id || null,
-        tenant: tenant ? { id: tenant.id, name: tenant.name, slug: tenant.slug, primaryColor: tenant.primaryColor, logoUrl: tenant.logoUrl } : null,
+        tenant: tenant ? { id: tenant.id, name: tenant.name, slug: tenant.slug, primaryColor: tenant.primaryColor, logoUrl: tenant.logoUrl, hiddenPages: tenant.settings?.hiddenPages || [] } : null,
         totpEnabled: profile.totp_enabled || false,
       },
       ...(requires2FASetup ? { requires2FASetup: true } : {}),

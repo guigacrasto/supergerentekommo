@@ -6,6 +6,7 @@ export interface Tenant {
   primaryColor: string;
   kommoBaseUrl: string | null;
   isActive: boolean;
+  hiddenPages?: string[];
 }
 
 export interface User {

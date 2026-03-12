@@ -58,6 +58,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const navigate = useNavigate();
   const [expandedTeams, setExpandedTeams] = useState<Record<string, boolean>>({});
 
+  // Filter nav items based on tenant hiddenPages
+  const hiddenPages = user?.tenant?.hiddenPages || [];
+  const visibleNavItems = NAV_ITEMS.filter(item => !hiddenPages.includes(item.to));
+
   // On mobile, collapsed is always false (full sidebar)
   const isMobile = onNavigate !== undefined;
   const isCollapsed = isMobile ? false : collapsed;
@@ -110,7 +114,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 py-2">
         <ul className="space-y-1">
-          {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+          {visibleNavItems.map(({ to, label, icon: Icon }) => (
             <li key={to}>
               <NavLink
                 to={to}
@@ -252,10 +256,11 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         {/* Team accordion sections — hidden when collapsed, admin only */}
         {!isCollapsed && (user?.role === 'admin' || user?.role === 'superadmin') && (
           <div className="mt-6 space-y-2">
-            {(['azul', 'amarela'] as const).map((team) => {
+            {(user?.teams || []).map((team) => {
               const teamPipelines = byTeam(team);
               if (teamPipelines.length === 0) return null;
               const expanded = !!expandedTeams[team];
+              const teamLabel = TEAM_LABELS[team as keyof typeof TEAM_LABELS] || team;
 
               return (
                 <div key={team}>
@@ -268,7 +273,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                     ) : (
                       <ChevronRight className="h-4 w-4" />
                     )}
-                    {TEAM_LABELS[team] || team}
+                    {teamLabel}
                   </button>
                   {expanded && (
                     <ul className="ml-4 space-y-0.5">
