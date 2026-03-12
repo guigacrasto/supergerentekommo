@@ -145,8 +145,8 @@ export function metricasRouter() {
 
       for (const [teamKey, tc] of Object.entries(teamConfigs)) {
         if (!tc.subdomain) continue;
-        const service = new KommoService(tc, teamKey);
-        const metrics = await getCrmMetrics(teamKey, service);
+        const service = new KommoService(tc, teamKey, req.tenantId);
+        const metrics = await getCrmMetrics(teamKey, service, req.tenantId, tc.excludePipelineNames);
 
         Object.assign(pipelineNames, metrics.pipelineNames);
 
