@@ -35,9 +35,9 @@ export function metricasRouter() {
         return;
       }
 
-      const tenantId = req.tenantId;
+      const tenantId = req.tenantId || req.userId;
       if (!tenantId) {
-        res.status(400).json({ error: "Tenant não encontrado" });
+        res.status(400).json({ error: "Usuário não identificado" });
         return;
       }
 
@@ -74,11 +74,7 @@ export function metricasRouter() {
   // — GET /entries — Lista entries brutas
   router.get("/entries", async (req: AuthRequest, res) => {
     try {
-      const tenantId = req.tenantId;
-      if (!tenantId) {
-        res.status(400).json({ error: "Tenant não encontrado" });
-        return;
-      }
+      const tenantId = req.tenantId || req.userId;
 
       const { from, to } = parseDateRange(req.query);
 
@@ -105,7 +101,7 @@ export function metricasRouter() {
   // — GET /summary — Endpoint principal com CPL/CAC/ROI calculados
   router.get("/summary", async (req: AuthRequest, res) => {
     try {
-      const tenantId = req.tenantId;
+      const tenantId = req.tenantId || req.userId;
 
       const { from, to, fromTs, toTs } = parseDateRange(req.query);
       console.log(`[metricas] summary: tenantId=${tenantId || 'none'}, from=${from}, to=${to}, fromTs=${fromTs}, toTs=${toTs}`);
