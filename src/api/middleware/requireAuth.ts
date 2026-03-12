@@ -14,6 +14,7 @@ export interface AuthRequest extends Request {
   allowedFunnels?: Record<string, number[]>;
   allowedGroups?: Record<string, string[]>;
   pausedPipelines?: number[];
+  canViewRanking?: boolean;
   tenantId?: string;
   tenant?: any;
 }
@@ -26,6 +27,7 @@ interface CachedProfile {
   allowedFunnels: Record<string, number[]>;
   allowedGroups: Record<string, string[]>;
   pausedPipelines: number[];
+  canViewRanking: boolean;
   tenantId?: string;
   tenant?: any;
   expiresAt: number;
@@ -62,6 +64,7 @@ export async function requireAuth(
     req.allowedFunnels = cached.allowedFunnels;
     req.allowedGroups = cached.allowedGroups;
     req.pausedPipelines = cached.pausedPipelines;
+    req.canViewRanking = cached.canViewRanking;
     req.tenantId = cached.tenantId;
     req.tenant = cached.tenant;
     return next();
@@ -76,7 +79,7 @@ export async function requireAuth(
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("status, role, teams")
+    .select("status, role, teams, can_view_ranking")
     .eq("id", user.id)
     .single();
 
@@ -139,6 +142,8 @@ export async function requireAuth(
     ? ALL_CONFIGURED_TEAMS
     : (profile.teams || []);
 
+  const canViewRanking = profile.can_view_ranking ?? false;
+
   // Cache the result
   authCache.set(token, {
     userId: user.id,
@@ -147,6 +152,7 @@ export async function requireAuth(
     allowedFunnels,
     allowedGroups,
     pausedPipelines,
+    canViewRanking,
     expiresAt: Date.now() + AUTH_CACHE_TTL_MS,
   });
 
@@ -156,6 +162,7 @@ export async function requireAuth(
   req.allowedFunnels = allowedFunnels;
   req.allowedGroups = allowedGroups;
   req.pausedPipelines = pausedPipelines;
+  req.canViewRanking = canViewRanking;
 
   next();
 }

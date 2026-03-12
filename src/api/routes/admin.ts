@@ -185,7 +185,7 @@ export function adminRouter() {
     try {
       const { data: profiles, error: profilesError } = await supabase
         .from("profiles")
-        .select("id, email, name, role, status, teams");
+        .select("id, email, name, role, status, teams, can_view_ranking");
 
       if (profilesError) {
         res.status(500).json({ error: profilesError.message });
@@ -237,6 +237,7 @@ export function adminRouter() {
         teams: p.teams,
         allowed_funnels: permissionsMap[p.id] || {},
         allowed_groups: groupPermMap[p.id] || {},
+        can_view_ranking: p.can_view_ranking ?? false,
       }));
 
       res.json(result);
@@ -602,6 +603,42 @@ export function adminRouter() {
       res.json({ ok: true, message: `Token do time ${team} renovado com sucesso.` });
     } catch (error: any) {
       console.error("[Admin] Erro ao trocar auth code Kommo:", error.message);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ──────────────────────────────────────────────
+  // Ranking Permission Toggle
+  // ──────────────────────────────────────────────
+
+  router.patch("/users/:id/ranking-permission", async (req: AuthRequest, res) => {
+    if (!isAdmin(req)) {
+      res.status(403).json({ error: "Acesso restrito a administradores." });
+      return;
+    }
+
+    const userId = req.params.id;
+    const { can_view_ranking } = req.body;
+
+    if (typeof can_view_ranking !== "boolean") {
+      res.status(400).json({ error: "Body deve conter can_view_ranking (boolean)." });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ can_view_ranking, updated_at: new Date().toISOString() })
+        .eq("id", userId);
+
+      if (error) {
+        res.status(500).json({ error: error.message });
+        return;
+      }
+
+      console.log(`[Admin] Ranking permission do usuario ${userId}: ${can_view_ranking}`);
+      res.json({ ok: true });
+    } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });

@@ -35,6 +35,7 @@ interface AdminUser {
   teams: string[];
   allowed_funnels: Record<string, number[]>;
   allowed_groups: Record<string, string[]>;
+  can_view_ranking: boolean;
 }
 
 /* ---------- Helpers ---------- */
@@ -198,6 +199,7 @@ function UserFunnelPanel({
   onSave,
   onSaveTeams,
   onSaveGroups,
+  onToggleRanking,
 }: {
   user: AdminUser;
   pipelines: AdminPipeline[];
@@ -205,6 +207,7 @@ function UserFunnelPanel({
   onSave: (userId: string, team: string, funnelIds: number[]) => Promise<void>;
   onSaveTeams: (userId: string, teams: string[]) => Promise<void>;
   onSaveGroups: (userId: string, team: string, groups: string[]) => Promise<void>;
+  onToggleRanking: (userId: string, value: boolean) => Promise<void>;
 }) {
   const grouped = groupByTeam(pipelines);
   const allTeamKeys = Object.keys(grouped);
@@ -231,6 +234,18 @@ function UserFunnelPanel({
   const [savedTeams, setSavedTeams] = useState(false);
   const [savingGroups, setSavingGroups] = useState<string | null>(null);
   const [savedGroupTeam, setSavedGroupTeam] = useState<string | null>(null);
+  const [rankingPerm, setRankingPerm] = useState(user.can_view_ranking ?? false);
+  const [savingRanking, setSavingRanking] = useState(false);
+
+  const handleToggleRanking = async (value: boolean) => {
+    setSavingRanking(true);
+    try {
+      await onToggleRanking(user.id, value);
+      setRankingPerm(value);
+    } finally {
+      setSavingRanking(false);
+    }
+  };
 
   const toggleTeam = (team: string) => {
     setUserTeams((prev) => {
@@ -480,6 +495,22 @@ function UserFunnelPanel({
           </div>
         );
       })}
+
+      {/* Permissões Especiais */}
+      <div>
+        <h5 className="font-heading text-body-sm font-semibold uppercase tracking-wider text-muted mb-2">
+          Permissões Especiais
+        </h5>
+        <div className="flex items-center gap-3">
+          <ToggleSwitch
+            checked={rankingPerm}
+            onChange={handleToggleRanking}
+            loading={savingRanking}
+            label="Pode visualizar Ranking"
+          />
+          <span className="text-body-sm text-foreground">Pode visualizar Ranking</span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -495,6 +526,7 @@ function UsersSection({
   onSaveTeams,
   onSaveGroups,
   onApproveUser,
+  onToggleRanking,
 }: {
   users: AdminUser[];
   pipelines: AdminPipeline[];
@@ -504,6 +536,7 @@ function UsersSection({
   onSaveTeams: (userId: string, teams: string[]) => Promise<void>;
   onSaveGroups: (userId: string, team: string, groups: string[]) => Promise<void>;
   onApproveUser: (userId: string, status: 'approved' | 'denied') => Promise<void>;
+  onToggleRanking: (userId: string, value: boolean) => Promise<void>;
 }) {
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
 
@@ -687,6 +720,7 @@ function UsersSection({
                             onSave={onSaveFunnels}
                             onSaveTeams={onSaveTeams}
                             onSaveGroups={onSaveGroups}
+                            onToggleRanking={onToggleRanking}
                           />
                         </div>
                       )}
@@ -833,6 +867,21 @@ export function AdminPage() {
     }
   };
 
+  const handleToggleRanking = async (userId: string, value: boolean) => {
+    try {
+      await api.patch(`/admin/users/${userId}/ranking-permission`, {
+        can_view_ranking: value,
+      });
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === userId ? { ...u, can_view_ranking: value } : u
+        )
+      );
+    } catch (err) {
+      console.error('[AdminPage] Erro ao salvar permissão de ranking:', err);
+    }
+  };
+
   if (!isAdmin) {
     return (
       <div className="flex flex-col items-center justify-center py-24">
@@ -875,6 +924,7 @@ export function AdminPage() {
           await api.patch(`/admin/users/${userId}/approve`, { status });
           fetchUsers();
         }}
+        onToggleRanking={handleToggleRanking}
       />
 
       {/* Section 3: Audit Logs */}

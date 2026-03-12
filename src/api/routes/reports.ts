@@ -1526,5 +1526,109 @@ export function reportsRouter() {
     }
   });
 
+  // GET /api/reports/ranking — ranking de times e agentes por BTs e faturamento
+  router.get("/ranking", async (req: AuthRequest, res) => {
+    // Acesso restrito: admin OU can_view_ranking
+    const isAdminUser = req.userRole === "admin" || req.userRole === "superadmin";
+    if (!isAdminUser && !req.canViewRanking) {
+      res.status(403).json({ error: "Sem permissão para visualizar ranking." });
+      return;
+    }
+
+    const { fromTs, toTs } = parseDateRange(req.query);
+    const STATUS_WON = 142;
+    const teamFilter = typeof req.query.team === "string" ? req.query.team : "";
+    const groupFilter = typeof req.query.group === "string" ? req.query.group : "";
+
+    try {
+      let allMetrics = await getFilteredMetrics(req);
+      if (teamFilter) {
+        allMetrics = allMetrics.filter(({ team }) => team === teamFilter);
+      }
+
+      const { groupUserIds, allGroups } = buildGroupFilter(allMetrics, groupFilter, req.allowedGroups || {});
+
+      // Aggregate by group (time) and by agent
+      const timeMap: Record<string, { bts: number; faturamento: number; leads: number }> = {};
+      const agenteMap: Record<string, { grupo: string; bts: number; faturamento: number; leads: number }> = {};
+
+      for (const { metrics } of allMetrics) {
+        for (const lead of metrics.leadSnapshots) {
+          // Apply group filter
+          if (groupUserIds && !groupUserIds.has(lead.responsible_user_id)) continue;
+
+          const agentName = metrics.userNames[lead.responsible_user_id] || `ID ${lead.responsible_user_id}`;
+          const groupName = metrics.userGroups[lead.responsible_user_id] || "Sem Equipe";
+
+          // Initialize maps
+          if (!timeMap[groupName]) timeMap[groupName] = { bts: 0, faturamento: 0, leads: 0 };
+          if (!agenteMap[agentName]) agenteMap[agentName] = { grupo: groupName, bts: 0, faturamento: 0, leads: 0 };
+
+          // Count all leads
+          timeMap[groupName].leads++;
+          agenteMap[agentName].leads++;
+
+          // Count BTs (won in date range)
+          if (lead.status_id === STATUS_WON && lead.closed_at >= fromTs && lead.closed_at <= toTs) {
+            const price = lead.price || 0;
+            timeMap[groupName].bts++;
+            timeMap[groupName].faturamento += price;
+            agenteMap[agentName].bts++;
+            agenteMap[agentName].faturamento += price;
+          }
+        }
+      }
+
+      // Build ranking de times
+      const rankingTimes = Object.entries(timeMap)
+        .map(([nome, d]) => ({
+          nome,
+          bts: d.bts,
+          faturamento: d.faturamento,
+          ticketMedio: d.bts > 0 ? Math.round(d.faturamento / d.bts) : 0,
+          leads: d.leads,
+          conversao: d.leads > 0 ? parseFloat(((d.bts / d.leads) * 100).toFixed(1)) : 0,
+        }))
+        .sort((a, b) => b.bts - a.bts);
+
+      // Build ranking de agentes
+      const rankingAgentes = Object.entries(agenteMap)
+        .map(([nome, d]) => ({
+          nome,
+          grupo: d.grupo,
+          bts: d.bts,
+          faturamento: d.faturamento,
+          ticketMedio: d.bts > 0 ? Math.round(d.faturamento / d.bts) : 0,
+        }))
+        .sort((a, b) => b.bts - a.bts);
+
+      // Build ranking por time (detalhado)
+      const rankingPorTime: Record<string, Array<{ nome: string; bts: number; faturamento: number; ticketMedio: number }>> = {};
+      for (const [agente, d] of Object.entries(agenteMap)) {
+        if (!rankingPorTime[d.grupo]) rankingPorTime[d.grupo] = [];
+        rankingPorTime[d.grupo].push({
+          nome: agente,
+          bts: d.bts,
+          faturamento: d.faturamento,
+          ticketMedio: d.bts > 0 ? Math.round(d.faturamento / d.bts) : 0,
+        });
+      }
+      // Sort agents within each team
+      for (const grupo of Object.keys(rankingPorTime)) {
+        rankingPorTime[grupo].sort((a, b) => b.bts - a.bts);
+      }
+
+      res.json({
+        rankingTimes,
+        rankingAgentes,
+        rankingPorTime,
+        grupos: Array.from(allGroups).sort(),
+      });
+    } catch (error: any) {
+      console.error("[Reports] Erro em ranking:", error.message);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   return router;
 }

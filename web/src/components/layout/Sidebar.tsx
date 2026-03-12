@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   Brain,
   TrendingUp,
+  Trophy,
   Settings,
   Building2 as Building2Icon,
   LogOut,
@@ -130,6 +131,29 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               </NavLink>
             </li>
           ))}
+
+          {/* Ranking — conditional on permission */}
+          {(user?.role === 'admin' || user?.role === 'superadmin' || user?.can_view_ranking) && (
+            <li>
+              <NavLink
+                to="/ranking"
+                onClick={handleNavClick}
+                title={isCollapsed ? 'Ranking' : undefined}
+                className={({ isActive }) =>
+                  cn(
+                    'flex items-center rounded-button px-3 py-2.5 text-body-md font-medium transition-all duration-200',
+                    isCollapsed ? 'justify-center' : 'gap-3',
+                    isActive
+                      ? 'bg-primary/15 text-primary shadow-[inset_0_0_0_1px_rgba(149,102,242,0.15)]'
+                      : 'text-white/60 hover:bg-white/[0.06] hover:text-white/90'
+                  )
+                }
+              >
+                <Trophy className="h-5 w-5 shrink-0" />
+                {!isCollapsed && 'Ranking'}
+              </NavLink>
+            </li>
+          )}
 
           {/* Admin-only nav items */}
           {(user?.role === 'admin' || user?.role === 'superadmin') && ADMIN_NAV_ITEMS.map(({ to, label, icon: Icon }) => (

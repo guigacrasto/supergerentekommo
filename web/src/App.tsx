@@ -23,6 +23,7 @@ import { TeamDashboardPage } from '@/pages/TeamDashboardPage';
 import { AdminPage } from '@/pages/AdminPage';
 import { SuperAdminPage } from '@/pages/SuperAdminPage';
 import { PredictionsPage } from '@/pages/PredictionsPage';
+import { RankingPage } from '@/pages/RankingPage';
 
 export default function App() {
   return (
@@ -49,6 +50,7 @@ export default function App() {
           <Route path="/alerts" element={<AlertsPage />} />
           <Route path="/insights" element={<InsightsPage />} />
           <Route path="/predictions" element={<PredictionsPage />} />
+          <Route path="/ranking" element={<RankingPage />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/super" element={<SuperAdminPage />} />
           <Route path="/profile" element={<ProfilePage />} />

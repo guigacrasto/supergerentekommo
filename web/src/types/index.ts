@@ -19,6 +19,7 @@ export interface User {
   tenantId?: string;
   tenant?: Tenant;
   totpEnabled?: boolean;
+  can_view_ranking?: boolean;
 }
 
 export interface LoginResponse {
