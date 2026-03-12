@@ -14,6 +14,7 @@ export class KommoService {
     private currentAccessToken: string;
     public readonly team: string;
     public readonly tenantId?: string;
+    private tokenLoaded = false;
 
     constructor(config: KommoConfig, team: string, tenantId?: string) {
         this.config = config;
@@ -33,6 +34,16 @@ export class KommoService {
 
         // Set initial token via the canonical channel so loadStoredToken() always overrides it
         this.setAccessToken(this.currentAccessToken);
+
+        // Lazy-load stored token on first request (covers tenant-created services)
+        this.client.interceptors.request.use(async (reqConfig) => {
+            if (!this.tokenLoaded) {
+                this.tokenLoaded = true;
+                await this.loadStoredToken();
+                reqConfig.headers["Authorization"] = `Bearer ${this.currentAccessToken}`;
+            }
+            return reqConfig;
+        });
 
         this.client.interceptors.response.use(
             (response) => response,
