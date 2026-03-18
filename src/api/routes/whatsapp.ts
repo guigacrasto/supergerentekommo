@@ -2,6 +2,7 @@ import { Router } from "express";
 import { supabase } from "../supabase.js";
 import { getTeamConfigsFromTenant } from "../../config.js";
 import { KommoService } from "../../services/kommo.js";
+import { WhatsAppRouter } from "../../services/whatsapp-router.js";
 import type { Tenant } from "../../types/index.js";
 
 export function whatsappRouter() {
@@ -162,6 +163,24 @@ export function whatsappRouter() {
       res.json({ logs: data || [] });
     } catch (err: any) {
       console.error("[WhatsApp] GET /logs error:", err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/whatsapp/sweep — Full sweep: re-check all recent leads and fix wrong assignments (admin only)
+  router.post("/sweep", async (req: any, res) => {
+    try {
+      if (req.userRole !== "admin" && req.userRole !== "superadmin") {
+        return res.status(403).json({ error: "Admin only" });
+      }
+
+      const hoursBack = Math.min(Number(req.body.hours) || 24, 72);
+      console.log(`[WhatsApp] Sweep requested for last ${hoursBack}h by ${req.userId}`);
+
+      const result = await WhatsAppRouter.sweepRecentLeads(req.tenantId, hoursBack);
+      res.json(result);
+    } catch (err: any) {
+      console.error("[WhatsApp] POST /sweep error:", err.message);
       res.status(500).json({ error: err.message });
     }
   });
