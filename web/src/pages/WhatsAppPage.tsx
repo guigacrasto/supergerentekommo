@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { MessageCircle, Plus, Trash2, ArrowRight, RefreshCw, Power, Pencil, Check, X } from 'lucide-react';
+import { MessageCircle, Plus, Trash2, ArrowRight, RefreshCw, Pencil, Check, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Card, Badge, Skeleton, EmptyState, Button } from '@/components/ui';
 import { cn } from '@/lib/utils';

@@ -12,18 +12,11 @@ export function whatsappRouter() {
     try {
       const tenantId = req.tenantId;
 
-      let query = supabase
+      const { data, error } = await supabase
         .from("whatsapp_numbers")
         .select("*")
         .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false });
-
-      // Non-admin users only see their own numbers
-      if (req.userRole !== "admin" && req.userRole !== "superadmin") {
-        query = query.eq("user_id", req.userId);
-      }
-
-      const { data, error } = await query;
       if (error) throw error;
 
       res.json({ numbers: data || [] });
