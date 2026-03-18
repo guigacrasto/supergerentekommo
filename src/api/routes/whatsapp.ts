@@ -166,5 +166,72 @@ export function whatsappRouter() {
     }
   });
 
+  // POST /api/whatsapp/test-alert — Simulate disconnection alert (admin only)
+  router.post("/test-alert", async (req: any, res) => {
+    try {
+      if (req.userRole !== "admin" && req.userRole !== "superadmin") {
+        return res.status(403).json({ error: "Admin only" });
+      }
+
+      const { number_id } = req.body;
+
+      // Get the number to test
+      const { data: num, error } = await supabase
+        .from("whatsapp_numbers")
+        .select("*")
+        .eq("id", number_id)
+        .eq("tenant_id", req.tenantId)
+        .single();
+
+      if (error || !num) {
+        return res.status(404).json({ error: "Número não encontrado" });
+      }
+
+      // Get user email
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("email")
+        .eq("id", num.user_id)
+        .single();
+
+      const { sendWhatsAppDisconnectedEmail } = await import("../../api/services/email.js");
+
+      const phone = num.phone.replace(/\D/g, "");
+      const formatted = phone.length === 13
+        ? `+${phone.slice(0, 2)} (${phone.slice(2, 4)}) ${phone.slice(4, 9)}-${phone.slice(9)}`
+        : phone;
+
+      // Send to the user who registered
+      if (profile?.email) {
+        await sendWhatsAppDisconnectedEmail(
+          profile.email,
+          formatted,
+          num.kommo_source_name || "",
+          num.team,
+          `Agente #${num.kommo_user_id || "?"}`
+        );
+      }
+
+      // Send to admin
+      await sendWhatsAppDisconnectedEmail(
+        "guilherme@onigroup.com.br",
+        formatted,
+        num.kommo_source_name || "",
+        num.team,
+        `Agente #${num.kommo_user_id || "?"}`
+      );
+
+      res.json({
+        ok: true,
+        sent_to: [profile?.email, "guilherme@onigroup.com.br"].filter(Boolean),
+        number: formatted,
+        source: num.kommo_source_name,
+      });
+    } catch (err: any) {
+      console.error("[WhatsApp] POST /test-alert error:", err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   return router;
 }
