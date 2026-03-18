@@ -167,17 +167,17 @@ export function whatsappRouter() {
     }
   });
 
-  // POST /api/whatsapp/sweep — Full sweep: re-check all recent leads and fix wrong assignments (admin only)
+  // POST /api/whatsapp/sweep — Re-process failed/skipped routing items (admin only)
   router.post("/sweep", async (req: any, res) => {
     try {
       if (req.userRole !== "admin" && req.userRole !== "superadmin") {
         return res.status(403).json({ error: "Admin only" });
       }
 
-      const hoursBack = Math.min(Number(req.body.hours) || 24, 72);
+      const hoursBack = Math.min(Number(req.body.hours) || 48, 72);
       console.log(`[WhatsApp] Sweep requested for last ${hoursBack}h by ${req.userId}`);
 
-      const result = await WhatsAppRouter.sweepRecentLeads(req.tenantId, hoursBack);
+      const result = await WhatsAppRouter.sweepAll(req.tenantId, hoursBack);
       res.json(result);
     } catch (err: any) {
       console.error("[WhatsApp] POST /sweep error:", err.message);

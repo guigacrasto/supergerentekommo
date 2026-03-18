@@ -3,9 +3,10 @@ import { KommoService } from "./kommo.js";
 import { getTeamConfigsFromTenant } from "../config.js";
 import type { Tenant } from "../types/index.js";
 
-const ROUTING_DELAY_MS = 5 * 60 * 1000; // 5 minutes
-const VERIFY_DELAY_MS = 2 * 60 * 1000; // 2 minutes after routing
-const MAX_RETRIES = 3;
+const ROUTING_DELAY_MS = 5 * 60 * 1000; // 5 minutes — first attempt
+const RETRY_DELAY_MS = 2 * 60 * 1000; // 2 minutes — between retries
+const MAX_ATTEMPTS = 3;
+const RECHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 const SOURCE_PATTERN = /fonte|source|canal|origin|channel/i;
 
 interface QueueItem {
@@ -15,10 +16,25 @@ interface QueueItem {
   lead_id: number;
   pipeline_id: number | null;
   scheduled_at: string;
-  attempt?: number;
+  result?: any;
 }
 
 export class WhatsAppRouter {
+  private static recheckHandle: ReturnType<typeof setInterval> | null = null;
+
+  /**
+   * Start hourly recheck of failed/skipped items.
+   */
+  static startHourlyRecheck(): void {
+    if (this.recheckHandle) return;
+    console.log(`[WhatsAppRouter] Hourly recheck started — every ${RECHECK_INTERVAL_MS / 60000}min`);
+    this.recheckHandle = setInterval(() => {
+      this.recheckFailedItems().catch((err) =>
+        console.error("[WhatsAppRouter] Hourly recheck error:", err.message)
+      );
+    }, RECHECK_INTERVAL_MS);
+  }
+
   /**
    * Schedule routing for a new lead. Inserts into queue and sets setTimeout.
    */
@@ -28,7 +44,6 @@ export class WhatsAppRouter {
     tenantId: string,
     team: string
   ): Promise<void> {
-    // Check if tenant has any whatsapp_numbers registered for this team
     const { count } = await supabase
       .from("whatsapp_numbers")
       .select("id", { count: "exact", head: true })
@@ -75,32 +90,55 @@ export class WhatsAppRouter {
       .from("whatsapp_routing_queue")
       .select("*")
       .eq("id", queueId)
-      .eq("status", "pending")
+      .in("status", ["pending", "retry"])
       .single();
 
     if (!item) return;
 
-    try {
-      await WhatsAppRouter.processRouting(item as QueueItem);
-    } catch (err: any) {
-      console.error(`[WhatsAppRouter] Error processing ${queueId}:`, err.message);
-      const attempt = (item.result?.attempt || 0) + 1;
+    const attempt = (item.result?.attempt || 0) + 1;
 
-      if (attempt < MAX_RETRIES) {
-        // Retry in 2 minutes
-        console.log(`[WhatsAppRouter] Will retry ${queueId} (attempt ${attempt}/${MAX_RETRIES})`);
+    try {
+      const result = await WhatsAppRouter.processRouting(item as QueueItem, attempt);
+
+      if (result === "no_match" && attempt < MAX_ATTEMPTS) {
+        // Lead doesn't have source data yet — retry in 2min
+        console.log(`[WhatsAppRouter] No match for lead ${item.lead_id}, retrying in 2min (attempt ${attempt}/${MAX_ATTEMPTS})`);
         await supabase
           .from("whatsapp_routing_queue")
-          .update({
-            result: { error: err.message, attempt },
-          })
+          .update({ status: "retry", result: { reason: "no_match", attempt } })
           .eq("id", queueId);
 
         setTimeout(() => {
           WhatsAppRouter.processQueueItem(queueId).catch((e) =>
             console.error(`[WhatsAppRouter] Retry error for ${queueId}:`, e.message)
           );
-        }, VERIFY_DELAY_MS);
+        }, RETRY_DELAY_MS);
+        return;
+      }
+
+      // If still no_match after all attempts, mark as final skip
+      if (result === "no_match") {
+        await WhatsAppRouter.markProcessed(queueId, "skipped", {
+          reason: "no_match",
+          attempt,
+          exhausted: true,
+        });
+      }
+    } catch (err: any) {
+      console.error(`[WhatsAppRouter] Error processing ${queueId}:`, err.message);
+
+      if (attempt < MAX_ATTEMPTS) {
+        console.log(`[WhatsAppRouter] Will retry ${queueId} (attempt ${attempt}/${MAX_ATTEMPTS})`);
+        await supabase
+          .from("whatsapp_routing_queue")
+          .update({ status: "retry", result: { error: err.message, attempt } })
+          .eq("id", queueId);
+
+        setTimeout(() => {
+          WhatsAppRouter.processQueueItem(queueId).catch((e) =>
+            console.error(`[WhatsAppRouter] Retry error for ${queueId}:`, e.message)
+          );
+        }, RETRY_DELAY_MS);
       } else {
         await supabase
           .from("whatsapp_routing_queue")
@@ -115,9 +153,9 @@ export class WhatsAppRouter {
   }
 
   /**
-   * Core routing logic: fetch lead, match source, reassign.
+   * Core routing logic. Returns "no_match" if source not found, undefined if processed/skipped.
    */
-  static async processRouting(item: QueueItem): Promise<void> {
+  static async processRouting(item: QueueItem, attempt: number): Promise<string | void> {
     const { tenant_id, team, lead_id } = item;
 
     const { data: tenant } = await supabase
@@ -144,8 +182,8 @@ export class WhatsAppRouter {
     try {
       lead = await service.getLeadDetails(lead_id);
     } catch (err: any) {
-      await WhatsAppRouter.markProcessed(item.id, "failed", { reason: "lead_fetch_failed", error: err.message });
-      return;
+      // Lead fetch failed — throw so it gets retried
+      throw new Error(`lead_fetch_failed: ${err.message}`);
     }
 
     const sourceName = WhatsAppRouter.extractSourceName(lead);
@@ -162,10 +200,12 @@ export class WhatsAppRouter {
       return;
     }
 
+    // Match by source name
     let matchedNumber = sourceName
       ? numbers.find((n: any) => n.kommo_source_name && sourceName.toLowerCase().includes(n.kommo_source_name.toLowerCase()))
       : null;
 
+    // Fallback: match by phone
     if (!matchedNumber) {
       const contactPhone = WhatsAppRouter.extractContactPhone(lead);
       if (contactPhone) {
@@ -175,11 +215,8 @@ export class WhatsAppRouter {
     }
 
     if (!matchedNumber) {
-      await WhatsAppRouter.markProcessed(item.id, "skipped", {
-        reason: "no_match",
-        source: sourceName || "unknown",
-      });
-      return;
+      // Return "no_match" so caller can decide to retry
+      return "no_match";
     }
 
     const targetKommoUserId = matchedNumber.kommo_user_id;
@@ -193,6 +230,7 @@ export class WhatsAppRouter {
       return;
     }
 
+    // === ROUTE THE LEAD ===
     const fromUserId = lead.responsible_user_id;
     await service.updateLeadResponsible(lead_id, targetKommoUserId);
 
@@ -214,6 +252,16 @@ export class WhatsAppRouter {
       }
     }
 
+    // Add note to the lead conversation in Kommo
+    try {
+      await service.addNote(
+        lead_id,
+        `SuperGerente roteou este lead do agente #${fromUserId} para o agente #${targetKommoUserId} (fonte: ${sourceName || matchedNumber.kommo_source_name || matchedNumber.phone})`
+      );
+    } catch (err: any) {
+      console.warn(`[WhatsAppRouter] Failed to add note to lead ${lead_id}:`, err.message);
+    }
+
     await supabase.from("whatsapp_routing_logs").insert({
       tenant_id,
       team,
@@ -232,247 +280,134 @@ export class WhatsAppRouter {
       from: fromUserId,
       to: targetKommoUserId,
       phone: matchedNumber.phone,
+      attempt,
+    });
+  }
+
+  /**
+   * Hourly recheck: re-process items that failed or had no_match in the last 48h.
+   */
+  static async recheckFailedItems(): Promise<{ retried: number; processed: number; errors: number }> {
+    const since = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
+
+    const { data: items } = await supabase
+      .from("whatsapp_routing_queue")
+      .select("id, lead_id, result")
+      .in("status", ["failed", "skipped"])
+      .gte("scheduled_at", since)
+      .order("scheduled_at", { ascending: true })
+      .limit(100);
+
+    if (!items || items.length === 0) {
+      console.log("[WhatsAppRouter] Recheck: nothing to retry");
+      return { retried: 0, processed: 0, errors: 0 };
+    }
+
+    // Only retry items that failed or skipped with retryable reasons
+    const retryable = items.filter((i) => {
+      const reason = i.result?.reason;
+      const status = i.result?.exhausted ? false : true;
+      return (
+        reason === "no_match" ||
+        reason === "lead_fetch_failed" ||
+        i.result?.error // API errors
+      ) && status;
     });
 
-    // Schedule verification check — confirms Kommo actually applied the change
-    WhatsAppRouter.scheduleVerification(lead_id, targetKommoUserId, tenant_id, team, 1);
-  }
+    console.log(`[WhatsAppRouter] Recheck: ${retryable.length} retryable items from last 48h`);
 
-  /**
-   * Schedule a verification check to confirm Kommo applied the routing.
-   * If the lead got reassigned back, re-routes it (up to MAX_RETRIES).
-   */
-  static scheduleVerification(
-    leadId: number,
-    expectedUserId: number,
-    tenantId: string,
-    team: string,
-    attempt: number
-  ): void {
-    if (attempt > MAX_RETRIES) {
-      console.log(`[WhatsAppRouter] Max verification retries reached for lead ${leadId}`);
-      return;
-    }
-
-    console.log(`[WhatsAppRouter] Verification scheduled for lead ${leadId} in ${VERIFY_DELAY_MS / 1000}s (attempt ${attempt}/${MAX_RETRIES})`);
-
-    setTimeout(async () => {
-      try {
-        await WhatsAppRouter.verifyRouting(leadId, expectedUserId, tenantId, team, attempt);
-      } catch (err: any) {
-        console.error(`[WhatsAppRouter] Verification error for lead ${leadId}:`, err.message);
-      }
-    }, VERIFY_DELAY_MS);
-  }
-
-  /**
-   * Verify that a lead is still assigned to the correct user.
-   * If Kommo reverted it, re-apply the routing.
-   */
-  static async verifyRouting(
-    leadId: number,
-    expectedUserId: number,
-    tenantId: string,
-    team: string,
-    attempt: number
-  ): Promise<void> {
-    const { data: tenant } = await supabase
-      .from("tenants")
-      .select("*")
-      .eq("id", tenantId)
-      .single();
-
-    if (!tenant) return;
-
-    const teamConfigs = getTeamConfigsFromTenant(tenant as Tenant);
-    const tc = teamConfigs[team];
-    if (!tc?.subdomain) return;
-
-    const service = new KommoService(tc, team, tenantId);
-    const lead = await service.getLeadDetails(leadId);
-
-    if (lead.responsible_user_id === expectedUserId) {
-      console.log(`[WhatsAppRouter] Verification OK — lead ${leadId} correctly assigned to ${expectedUserId}`);
-      return;
-    }
-
-    // Lead was reassigned away — re-route
-    console.log(
-      `[WhatsAppRouter] Verification FAILED — lead ${leadId} is on user ${lead.responsible_user_id}, ` +
-      `expected ${expectedUserId}. Re-routing (attempt ${attempt}/${MAX_RETRIES})...`
-    );
-
-    const fromUserId = lead.responsible_user_id;
-    await service.updateLeadResponsible(leadId, expectedUserId);
-
-    // Also re-assign contacts and companies
-    const contacts = lead._embedded?.contacts || [];
-    for (const contact of contacts) {
-      try {
-        await service.updateContactResponsible(contact.id, expectedUserId);
-      } catch (err: any) {
-        console.warn(`[WhatsAppRouter] Verify: Failed to update contact ${contact.id}:`, err.message);
-      }
-    }
-
-    const companies = lead._embedded?.companies || [];
-    for (const company of companies) {
-      try {
-        await service.updateCompanyResponsible(company.id, expectedUserId);
-      } catch (err: any) {
-        console.warn(`[WhatsAppRouter] Verify: Failed to update company ${company.id}:`, err.message);
-      }
-    }
-
-    // Log the re-routing
-    await supabase.from("whatsapp_routing_logs").insert({
-      tenant_id: tenantId,
-      team,
-      lead_id: leadId,
-      lead_name: lead.name || `Lead ${leadId}`,
-      from_user_id: fromUserId,
-      to_user_id: expectedUserId,
-      to_user_name: `re-route (attempt ${attempt})`,
-      phone_matched: "verification",
-      source_name: "re-route",
-    });
-
-    console.log(`[WhatsAppRouter] Re-routed lead ${leadId}: ${fromUserId} -> ${expectedUserId} (attempt ${attempt})`);
-
-    // Schedule next verification
-    WhatsAppRouter.scheduleVerification(leadId, expectedUserId, tenantId, team, attempt + 1);
-  }
-
-  /**
-   * Full sweep: re-check all recently routed leads and fix any that drifted.
-   * Returns a summary of what was found and fixed.
-   */
-  static async sweepRecentLeads(
-    tenantId: string,
-    hoursBack: number = 24
-  ): Promise<{ checked: number; fixed: number; errors: number; details: any[] }> {
-    const since = new Date(Date.now() - hoursBack * 3600 * 1000).toISOString();
-
-    // Get all routing logs from the period
-    const { data: logs, error } = await supabase
-      .from("whatsapp_routing_logs")
-      .select("*")
-      .eq("tenant_id", tenantId)
-      .gte("routed_at", since)
-      .order("routed_at", { ascending: false });
-
-    if (error) throw error;
-    if (!logs || logs.length === 0) {
-      return { checked: 0, fixed: 0, errors: 0, details: [] };
-    }
-
-    // Deduplicate by lead_id — keep only the most recent routing per lead
-    const latestByLead = new Map<number, any>();
-    for (const log of logs) {
-      if (!latestByLead.has(log.lead_id)) {
-        latestByLead.set(log.lead_id, log);
-      }
-    }
-
-    console.log(`[WhatsAppRouter] Sweep: checking ${latestByLead.size} unique leads from last ${hoursBack}h`);
-
-    const { data: tenant } = await supabase
-      .from("tenants")
-      .select("*")
-      .eq("id", tenantId)
-      .single();
-
-    if (!tenant) throw new Error("Tenant not found");
-
-    const teamConfigs = getTeamConfigsFromTenant(tenant as Tenant);
-    const serviceCache = new Map<string, KommoService>();
-
-    let checked = 0;
-    let fixed = 0;
+    let processed = 0;
     let errors = 0;
-    const details: any[] = [];
 
-    for (const [leadId, log] of latestByLead) {
-      checked++;
+    for (const item of retryable) {
       try {
-        const tc = teamConfigs[log.team];
-        if (!tc?.subdomain) continue;
+        // Reset to pending so processQueueItem picks it up
+        await supabase
+          .from("whatsapp_routing_queue")
+          .update({ status: "pending", result: { ...item.result, recheck: true } })
+          .eq("id", item.id);
 
-        if (!serviceCache.has(log.team)) {
-          serviceCache.set(log.team, new KommoService(tc, log.team, tenantId));
-        }
-        const service = serviceCache.get(log.team)!;
-
-        const lead = await service.getLeadDetails(leadId);
-
-        if (lead.responsible_user_id === log.to_user_id) {
-          details.push({
-            lead_id: leadId,
-            lead_name: log.lead_name,
-            status: "ok",
-            assigned_to: log.to_user_id,
-          });
-          continue;
-        }
-
-        // Lead is on the wrong user — fix it
-        console.log(
-          `[WhatsAppRouter] Sweep: lead ${leadId} on user ${lead.responsible_user_id}, ` +
-          `expected ${log.to_user_id} — fixing...`
-        );
-
-        await service.updateLeadResponsible(leadId, log.to_user_id);
-
-        const contacts = lead._embedded?.contacts || [];
-        for (const contact of contacts) {
-          try {
-            await service.updateContactResponsible(contact.id, log.to_user_id);
-          } catch { /* skip */ }
-        }
-
-        const companies = lead._embedded?.companies || [];
-        for (const company of companies) {
-          try {
-            await service.updateCompanyResponsible(company.id, log.to_user_id);
-          } catch { /* skip */ }
-        }
-
-        await supabase.from("whatsapp_routing_logs").insert({
-          tenant_id: tenantId,
-          team: log.team,
-          lead_id: leadId,
-          lead_name: lead.name || `Lead ${leadId}`,
-          from_user_id: lead.responsible_user_id,
-          to_user_id: log.to_user_id,
-          to_user_name: `sweep-fix`,
-          phone_matched: log.phone_matched || "sweep",
-          source_name: log.source_name || "sweep",
-        });
-
-        fixed++;
-        details.push({
-          lead_id: leadId,
-          lead_name: log.lead_name,
-          status: "fixed",
-          was_on: lead.responsible_user_id,
-          moved_to: log.to_user_id,
-        });
+        await WhatsAppRouter.processQueueItem(item.id);
+        processed++;
       } catch (err: any) {
         errors++;
-        details.push({
-          lead_id: leadId,
-          lead_name: log.lead_name,
-          status: "error",
-          error: err.message,
-        });
+        console.error(`[WhatsAppRouter] Recheck error for ${item.id}:`, err.message);
       }
 
-      // Rate limit: small delay between API calls
+      // Rate limit
+      await new Promise((r) => setTimeout(r, 500));
+    }
+
+    console.log(`[WhatsAppRouter] Recheck complete: ${retryable.length} retried, ${processed} processed, ${errors} errors`);
+    return { retried: retryable.length, processed, errors };
+  }
+
+  /**
+   * Full sweep: re-process ALL failed/skipped/no_match items from the last N hours.
+   * Forces retry even on exhausted items.
+   */
+  static async sweepAll(
+    tenantId: string | null,
+    hoursBack: number = 48
+  ): Promise<{ retried: number; processed: number; skipped: number; errors: number }> {
+    const since = new Date(Date.now() - hoursBack * 3600 * 1000).toISOString();
+
+    let query = supabase
+      .from("whatsapp_routing_queue")
+      .select("id, lead_id, status, result")
+      .in("status", ["failed", "skipped"])
+      .gte("scheduled_at", since)
+      .order("scheduled_at", { ascending: true })
+      .limit(200);
+
+    if (tenantId) {
+      query = query.eq("tenant_id", tenantId);
+    }
+
+    const { data: items } = await query;
+
+    if (!items || items.length === 0) {
+      console.log("[WhatsAppRouter] Sweep: nothing to retry");
+      return { retried: 0, processed: 0, skipped: 0, errors: 0 };
+    }
+
+    // Filter to only retryable reasons (exclude "already_assigned", "no_kommo_user_id", etc.)
+    const retryable = items.filter((i) => {
+      const reason = i.result?.reason;
+      return (
+        !reason || // errors without reason
+        reason === "no_match" ||
+        reason === "lead_fetch_failed"
+      );
+    });
+
+    const skipped = items.length - retryable.length;
+
+    console.log(`[WhatsAppRouter] Sweep: ${retryable.length} items to retry, ${skipped} permanently skipped (last ${hoursBack}h)`);
+
+    let processed = 0;
+    let errors = 0;
+
+    for (const item of retryable) {
+      try {
+        await supabase
+          .from("whatsapp_routing_queue")
+          .update({ status: "pending", result: { ...item.result, sweep: true, attempt: 0 } })
+          .eq("id", item.id);
+
+        await WhatsAppRouter.processQueueItem(item.id);
+        processed++;
+      } catch (err: any) {
+        errors++;
+        console.error(`[WhatsAppRouter] Sweep error for ${item.id}:`, err.message);
+      }
+
+      // Rate limit
       await new Promise((r) => setTimeout(r, 300));
     }
 
-    console.log(`[WhatsAppRouter] Sweep complete: ${checked} checked, ${fixed} fixed, ${errors} errors`);
-    return { checked, fixed, errors, details };
+    console.log(`[WhatsAppRouter] Sweep complete: ${retryable.length} retried, ${processed} processed, ${errors} errors`);
+    return { retried: retryable.length, processed, skipped, errors };
   }
 
   /**
@@ -482,7 +417,7 @@ export class WhatsAppRouter {
     const { data: pending } = await supabase
       .from("whatsapp_routing_queue")
       .select("id, scheduled_at")
-      .eq("status", "pending")
+      .in("status", ["pending", "retry"])
       .lte("scheduled_at", new Date().toISOString())
       .order("scheduled_at", { ascending: true })
       .limit(50);

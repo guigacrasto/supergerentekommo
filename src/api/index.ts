@@ -7,6 +7,7 @@ import { startAuditCleanup } from "./middleware/auditLog.js";
 import { cleanupExpiredChallenges } from "./services/totp.js";
 import { loadTokens } from "../services/token-store.js";
 import { WhatsAppHealthMonitor } from "../services/whatsapp-health-monitor.js";
+import { WhatsAppRouter } from "../services/whatsapp-router.js";
 
 validateConfig();
 
@@ -116,4 +117,7 @@ app.listen(PORT, async () => {
 
   // Start WhatsApp health monitor (checks every 15min)
   WhatsAppHealthMonitor.start();
+
+  // Start WhatsApp routing hourly recheck (retries failed/no_match items)
+  WhatsAppRouter.startHourlyRecheck();
 });
