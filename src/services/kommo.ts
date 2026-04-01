@@ -533,4 +533,24 @@ export class KommoService {
         return [];
       }
     }
+
+    public async createLead(data: {
+        name: string;
+        pipeline_id: number;
+        status_id: number;
+        responsible_user_id?: number;
+        price?: number;
+        custom_fields_values?: any[];
+        _embedded?: { tags?: Array<{ name: string }> };
+    }): Promise<any> {
+        try {
+            const response = await this.client.post("/leads", [data]);
+            const created = response.data?._embedded?.leads?.[0];
+            console.log(`[KommoService:${this.team}] Lead created: ${created?.id} in pipeline ${data.pipeline_id}`);
+            return created;
+        } catch (error: any) {
+            console.error(`[KommoService:${this.team}] Error creating lead:`, error.message);
+            throw error;
+        }
+    }
 }
