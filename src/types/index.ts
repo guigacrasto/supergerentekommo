@@ -19,6 +19,7 @@ export interface Lead {
     updated_by: number;
     created_at: number;
     updated_at: number;
+    status_changed_at: number;
     closed_at: number;
     closest_task_at: number;
     is_deleted: boolean;
