@@ -4,6 +4,18 @@ Todas as alterações notáveis do projeto são documentadas aqui.
 
 ---
 
+## [2026-04-01] — Lead Remanejamento Automation
+
+### Adicionado
+- **Lead Remanejamento** (`src/services/lead-remanejamento.ts`): Automacao diaria (4h BRT) que remaneja leads estagnados no tenant GAME
+  - **Regra R1**: Leads em "EM ATENDIMENTO" (azul) / "CLIENTE INTERESSADO" (amarelo) ha 10+ dias sem nenhuma nota → cria novo lead em "NEW LEADS 2" + fecha antigo como venda perdida
+  - **Regra R2**: Leads em "N ATENDEU/ CX POSTAL /SEM RESPOSTA" ha 15+ dias → mesmo remanejamento
+  - Roda em ambas as contas Kommo (azul + amarela) e todos os funis
+  - Email CSV diario para guilherme@onigroup.com.br com relatorio dos leads movidos
+- **KommoService.createLead()**: Novo metodo para criar leads via API Kommo POST /leads
+
+---
+
 ## [2026-03-08] — Multi-Tenant Architecture
 
 ### Adicionado
