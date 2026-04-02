@@ -10,6 +10,11 @@ import { Resend } from "resend";
 const TARGET_HOUR_UTC = 7; // 4h BRT = 7h UTC
 const RECIPIENT = "guilherme@onigroup.com.br";
 
+// Data de corte: so processa leads cujo status_changed_at >= esta data
+// Leads que ja estavam nas etapas antes disso sao ignorados
+const CUTOFF_DATE = new Date("2026-04-01T00:00:00-03:00"); // 01/04/2026 BRT
+const CUTOFF_TIMESTAMP = Math.floor(CUTOFF_DATE.getTime() / 1000);
+
 interface StageRule {
   stageName: string;
   days: number;
@@ -42,12 +47,13 @@ interface RemanejamentoResult {
 
 async function findLossReasonId(service: KommoService): Promise<number | undefined> {
   const reasons = await service.getLossReasons();
-  const match = reasons.find(r => r.name.toLowerCase().includes("desqualificado"));
+  // Busca "nao satisfeito" (motivo escolhido pelo usuario)
+  const match = reasons.find(r => r.name.toLowerCase().includes("não satisfeito") || r.name.toLowerCase().includes("nao satisfeito"));
   if (match) {
     console.log(`[LeadRemanejamento] Loss reason found: "${match.name}" (id: ${match.id})`);
     return match.id;
   }
-  console.warn(`[LeadRemanejamento] Loss reason "desqualificado" not found. Closing without reason.`);
+  console.warn(`[LeadRemanejamento] Loss reason "nao satisfeito" not found. Closing without reason.`);
   return undefined;
 }
 
@@ -105,6 +111,10 @@ async function processTeam(
       for (const lead of leads) {
         // Check days in stage using status_changed_at (Kommo field, unix timestamp)
         const statusChangedAt = lead.status_changed_at || lead.updated_at || lead.created_at;
+
+        // Ignorar leads que entraram na etapa ANTES da data de corte (01/04/2026)
+        if (statusChangedAt < CUTOFF_TIMESTAMP) continue;
+
         const daysInStage = Math.floor((now - statusChangedAt) / 86400);
 
         if (daysInStage < rule.days) continue;
@@ -128,12 +138,28 @@ async function processTeam(
             responsible_user_id: lead.responsible_user_id,
           };
           if (lead.price) newLeadData.price = lead.price;
-          if (lead.custom_fields_values) newLeadData.custom_fields_values = lead.custom_fields_values;
           if (lead._embedded?.tags?.length > 0) {
             newLeadData._embedded = { tags: lead._embedded.tags.map((t: any) => ({ name: t.name })) };
           }
 
-          const newLead = await service.createLead(newLeadData);
+          // Copiar custom fields, mas se falhar (ex: campo de escolha invalido), tenta sem eles
+          let newLead: any;
+          if (lead.custom_fields_values && lead.custom_fields_values.length > 0) {
+            newLeadData.custom_fields_values = lead.custom_fields_values;
+            try {
+              newLead = await service.createLead(newLeadData);
+            } catch (cfErr: any) {
+              if (cfErr?.response?.status === 400) {
+                console.warn(`[LeadRemanejamento] Lead ${lead.id}: custom fields causaram erro 400, tentando sem eles...`);
+                delete newLeadData.custom_fields_values;
+                newLead = await service.createLead(newLeadData);
+              } else {
+                throw cfErr;
+              }
+            }
+          } else {
+            newLead = await service.createLead(newLeadData);
+          }
 
           // 2. Add note to old lead
           await service.addNote(
