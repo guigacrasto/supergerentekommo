@@ -142,15 +142,36 @@ async function processTeam(
           };
           if (lead.price) newLeadData.price = lead.price;
 
-          // Copiar tags e contatos do lead antigo via _embedded (vincula na criação)
+          // Copiar tags do lead antigo
           const embedded: any = {};
           if (lead._embedded?.tags?.length > 0) {
             embedded.tags = lead._embedded.tags.map((t: any) => ({ name: t.name }));
           }
-          const contacts = lead._embedded?.contacts;
-          if (contacts && contacts.length > 0) {
-            embedded.contacts = contacts.map((c: any) => ({ id: c.id }));
+
+          // Buscar contatos individualmente (bulk getLeads nem sempre retorna _embedded.contacts)
+          let contactIds: number[] = [];
+          const bulkContacts = lead._embedded?.contacts;
+          if (bulkContacts && bulkContacts.length > 0) {
+            contactIds = bulkContacts.map((c: any) => c.id);
+          } else {
+            // Fallback: buscar lead individual para pegar contatos
+            try {
+              const resp = await service.client.get(`/leads/${lead.id}`, {
+                params: { with: "contacts" },
+              });
+              const leadContacts = resp.data?._embedded?.contacts;
+              if (leadContacts && leadContacts.length > 0) {
+                contactIds = leadContacts.map((c: any) => c.id);
+              }
+            } catch (e: any) {
+              console.warn(`[LeadRemanejamento] Lead ${lead.id}: erro ao buscar contatos individuais: ${e.message}`);
+            }
           }
+
+          if (contactIds.length > 0) {
+            embedded.contacts = contactIds.map((id) => ({ id }));
+          }
+
           if (Object.keys(embedded).length > 0) {
             newLeadData._embedded = embedded;
           }
@@ -174,8 +195,8 @@ async function processTeam(
             newLead = await service.createLead(newLeadData);
           }
 
-          if (newLead?.id && contacts && contacts.length > 0) {
-            console.log(`[LeadRemanejamento] ${contacts.length} contato(s) vinculado(s) ao lead ${newLead.id} via _embedded`);
+          if (newLead?.id && contactIds.length > 0) {
+            console.log(`[LeadRemanejamento] ${contactIds.length} contato(s) vinculado(s) ao lead ${newLead.id} via _embedded`);
           }
 
           // 2. Add note to old lead
