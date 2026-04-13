@@ -28,7 +28,7 @@ export class KommoService {
                 "Content-Type": "application/json",
             },
             paramsSerializer: {
-                serialize: (params) => qs.stringify(params, { arrayFormat: 'brackets' })
+                serialize: (params) => qs.stringify(params, { arrayFormat: 'indices' })
             }
         });
 
@@ -541,7 +541,7 @@ export class KommoService {
         responsible_user_id?: number;
         price?: number;
         custom_fields_values?: any[];
-        _embedded?: { tags?: Array<{ name: string }> };
+        _embedded?: { tags?: Array<{ name: string }>; contacts?: Array<{ id: number }> };
     }): Promise<any> {
         try {
             const response = await this.client.post("/leads", [data]);

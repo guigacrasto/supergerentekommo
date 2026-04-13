@@ -109,6 +109,9 @@ async function processTeam(
       console.log(`[LeadRemanejamento] Found ${leads.length} leads in "${targetStatus.name}"`);
 
       for (const lead of leads) {
+        // Verificar se o lead REALMENTE pertence a este pipeline
+        if (lead.pipeline_id !== pipeline.id) continue;
+
         // Check days in stage using status_changed_at (Kommo field, unix timestamp)
         const statusChangedAt = lead.status_changed_at || lead.updated_at || lead.created_at;
 
@@ -138,8 +141,18 @@ async function processTeam(
             responsible_user_id: lead.responsible_user_id,
           };
           if (lead.price) newLeadData.price = lead.price;
+
+          // Copiar tags e contatos do lead antigo via _embedded (vincula na criação)
+          const embedded: any = {};
           if (lead._embedded?.tags?.length > 0) {
-            newLeadData._embedded = { tags: lead._embedded.tags.map((t: any) => ({ name: t.name })) };
+            embedded.tags = lead._embedded.tags.map((t: any) => ({ name: t.name }));
+          }
+          const contacts = lead._embedded?.contacts;
+          if (contacts && contacts.length > 0) {
+            embedded.contacts = contacts.map((c: any) => ({ id: c.id }));
+          }
+          if (Object.keys(embedded).length > 0) {
+            newLeadData._embedded = embedded;
           }
 
           // Copiar custom fields, mas se falhar (ex: campo de escolha invalido), tenta sem eles
@@ -159,6 +172,10 @@ async function processTeam(
             }
           } else {
             newLead = await service.createLead(newLeadData);
+          }
+
+          if (newLead?.id && contacts && contacts.length > 0) {
+            console.log(`[LeadRemanejamento] ${contacts.length} contato(s) vinculado(s) ao lead ${newLead.id} via _embedded`);
           }
 
           // 2. Add note to old lead
