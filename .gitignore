@@ -13,3 +13,17 @@ yarn-error.log*
 *.webp
 *.png
 *.mp4
+.env.*
+!.env.example
+.next/
+.vercel/
+.turbo/
+coverage/
+.venv/
+__pycache__/
+*.pem
+*.key
+client_secret*.json
+google-service-account.json
+.claude/settings.json
+*service-account*.json

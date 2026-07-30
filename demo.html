@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SuperGerente — Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@500;600;700&family=Mulish:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#12081E;--surface:#1A1A2E;--surface2:#22223A;--elevated:#2F233C;
+  --sidebar:#0E0E1A;--primary:#9566F2;--blue:#1F74EC;--green:#22C55E;
+  --yellow:#F9AA3C;--red:#EF4444;--text:#E0E3E9;--muted:#A0A0B8;
+  --glass:rgba(255,255,255,0.06);--glass-border:rgba(255,255,255,0.08);
+  --radius-card:14px;--radius-btn:10px;
+}
+html{scroll-behavior:smooth}
+body{font-family:'Mulish',sans-serif;background:var(--bg);color:var(--text);line-height:1.5;overflow-x:hidden}
+h1,h2,h3,h4{font-family:'Libre Franklin',sans-serif;font-weight:600}
+
+/* Layout */
+.app{display:flex;min-height:100vh}
+.sidebar{width:240px;background:var(--sidebar);border-right:1px solid var(--glass-border);padding:20px 12px;display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;z-index:50;transition:transform .3s}
+.main{margin-left:240px;flex:1;padding:28px;width:calc(100% - 240px)}
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+.topbar h2{font-size:1.1rem;font-weight:500;color:var(--muted)}
+.topbar h2 strong{color:var(--text);font-weight:700}
+
+/* Sidebar */
+.logo-area{display:flex;align-items:center;gap:12px;padding:0 8px 24px;border-bottom:1px solid var(--glass-border);margin-bottom:16px}
+.logo-area svg{width:36px;height:36px;border-radius:8px}
+.logo-area span{font-family:'Libre Franklin',sans-serif;font-weight:700;font-size:1.05rem;background:linear-gradient(135deg,var(--primary),var(--blue));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.nav-item{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:var(--radius-btn);color:var(--muted);font-size:.875rem;font-weight:500;cursor:pointer;transition:all .2s;margin-bottom:2px;text-decoration:none}
+.nav-item:hover{color:var(--text);background:rgba(255,255,255,0.04)}
+.nav-item.active{color:var(--primary);background:rgba(149,102,242,0.12);box-shadow:inset 0 0 0 1px rgba(149,102,242,0.15)}
+.nav-item svg{width:18px;height:18px;stroke-width:1.8;flex-shrink:0}
+.nav-section{font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:16px 14px 6px;font-weight:600;opacity:.6}
+.sidebar-footer{margin-top:auto;border-top:1px solid var(--glass-border);padding-top:12px}
+
+/* Page sections */
+.page{display:none}
+.page.active{display:block}
+.section-title{font-size:1.15rem;font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+
+/* Filters */
+.filters{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;align-items:center}
+.chip{padding:6px 16px;border-radius:9999px;font-size:.8rem;font-weight:600;cursor:pointer;border:1px solid var(--glass-border);background:var(--surface2);color:var(--muted);transition:all .2s;user-select:none}
+.chip:hover{color:var(--text);border-color:rgba(255,255,255,0.15)}
+.chip.active{background:rgba(149,102,242,0.12);color:var(--primary);border-color:var(--primary)}
+.chip.azul{background:rgba(31,116,236,0.12);color:var(--blue);border-color:var(--blue)}
+.chip.amarela{background:rgba(249,170,60,0.12);color:var(--yellow);border-color:var(--yellow)}
+.filter-select{padding:7px 12px;border-radius:var(--radius-btn);border:1px solid var(--glass-border);background:var(--surface2);color:var(--text);font-size:.8rem;font-family:'Mulish',sans-serif;outline:none;cursor:pointer}
+.filter-select:focus{border-color:var(--primary)}
+.date-input{padding:7px 12px;border-radius:var(--radius-btn);border:1px solid var(--glass-border);background:var(--surface2);color:var(--text);font-size:.8rem;font-family:'Mulish',sans-serif;outline:none}
+.date-input:focus{border-color:var(--primary)}
+
+/* KPI Cards */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin-bottom:24px}
+.kpi{background:var(--surface);border:1px solid var(--glass-border);border-radius:var(--radius-card);padding:20px;border-left:4px solid var(--primary);display:flex;align-items:center;gap:16px}
+.kpi.success{border-left-color:var(--green)}.kpi.warning{border-left-color:var(--yellow)}.kpi.danger{border-left-color:var(--red)}.kpi.info{border-left-color:var(--blue)}
+.kpi-icon{width:44px;height:44px;border-radius:var(--radius-card);background:var(--surface2);border:1px solid var(--glass-border);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.kpi-icon svg{width:20px;height:20px}
+.kpi-label{font-size:.75rem;color:var(--muted);font-weight:500;margin-bottom:2px}
+.kpi-value{font-family:'Libre Franklin',sans-serif;font-size:1.4rem;font-weight:700;color:var(--text)}
+
+/* Cards */
+.card{background:var(--surface);border:1px solid var(--glass-border);border-radius:var(--radius-card);padding:20px;margin-bottom:20px}
+.card-title{font-size:1rem;font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+
+/* Tables */
+table{width:100%;border-collapse:collapse}
+thead{background:var(--surface2)}
+th{text-align:left;padding:10px 16px;font-size:.75rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+td{padding:12px 16px;font-size:.85rem;border-top:1px solid var(--glass-border)}
+tr:hover td{background:rgba(255,255,255,0.02)}
+.badge{display:inline-block;padding:3px 10px;border-radius:9999px;font-size:.7rem;font-weight:600}
+.badge-success{background:rgba(34,197,94,0.12);color:var(--green)}
+.badge-warning{background:rgba(249,170,60,0.12);color:var(--yellow)}
+.badge-danger{background:rgba(239,68,68,0.12);color:var(--red)}
+.badge-primary{background:rgba(149,102,242,0.12);color:var(--primary)}
+.badge-blue{background:rgba(31,116,236,0.12);color:var(--blue)}
+
+/* Charts (CSS bars) */
+.bar-chart{display:flex;flex-direction:column;gap:10px}
+.bar-row{display:flex;align-items:center;gap:12px}
+.bar-label{width:160px;font-size:.82rem;color:var(--muted);text-align:right;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar-track{flex:1;height:28px;background:var(--surface2);border-radius:0 6px 6px 0;overflow:hidden;position:relative}
+.bar-fill{height:100%;border-radius:0 6px 6px 0;transition:width .8s ease-out;min-width:2px}
+.bar-value{position:absolute;right:-65px;top:50%;transform:translateY(-50%);font-size:.78rem;color:var(--muted);white-space:nowrap;width:60px}
+.bar-wrapper{display:flex;align-items:center;flex:1}
+
+/* Ranking */
+.ranking{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.rank-list{list-style:none}
+.rank-item{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--glass-border)}
+.rank-pos{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.rank-1{background:linear-gradient(135deg,#FFD700,#FFA500);color:#000}
+.rank-2{background:linear-gradient(135deg,#C0C0C0,#A0A0A0);color:#000}
+.rank-3{background:linear-gradient(135deg,#CD7F32,#A0522D);color:#fff}
+.rank-4,.rank-5{background:var(--surface2);color:var(--muted)}
+.rank-name{flex:1;font-size:.85rem;font-weight:500}
+.rank-value{font-weight:700;font-size:.9rem}
+
+/* Chat */
+.chat-container{display:flex;flex-direction:column;height:calc(100vh - 140px);background:var(--surface);border:1px solid var(--glass-border);border-radius:var(--radius-card);overflow:hidden}
+.chat-mentors{display:flex;gap:8px;padding:14px 18px;border-bottom:1px solid var(--glass-border);overflow-x:auto;flex-shrink:0}
+.mentor-chip{padding:6px 14px;border-radius:9999px;font-size:.78rem;font-weight:600;cursor:pointer;border:1px solid var(--glass-border);background:transparent;color:var(--muted);transition:all .2s;white-space:nowrap}
+.mentor-chip.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.chat-messages{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:12px}
+.msg{max-width:75%;padding:12px 18px;border-radius:16px;font-size:.88rem;line-height:1.6}
+.msg.user{align-self:flex-end;background:linear-gradient(135deg,var(--primary),var(--blue));color:#fff;border-bottom-right-radius:6px}
+.msg.assistant{align-self:flex-start;background:var(--surface2);border:1px solid var(--glass-border);color:var(--text);border-bottom-left-radius:6px}
+.chat-input-area{display:flex;gap:10px;padding:14px 18px;border-top:1px solid var(--glass-border);flex-shrink:0}
+.chat-input{flex:1;padding:10px 16px;border-radius:var(--radius-btn);border:1px solid var(--glass-border);background:var(--surface2);color:var(--text);font-size:.88rem;font-family:'Mulish',sans-serif;outline:none}
+.chat-input:focus{border-color:var(--primary)}
+.chat-send{padding:10px 20px;border-radius:var(--radius-btn);background:linear-gradient(135deg,var(--primary),var(--blue));color:#fff;border:none;font-weight:600;cursor:pointer;font-size:.85rem;transition:opacity .2s}
+.chat-send:hover{opacity:.85}
+
+/* Predictions */
+.pred-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+.pred-card{background:var(--surface);border:1px solid var(--glass-border);border-radius:var(--radius-card);padding:18px;transition:border-color .2s}
+.pred-card:hover{border-color:rgba(255,255,255,0.15)}
+.pred-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
+.pred-title{font-weight:600;font-size:.9rem}
+.pred-meta{font-size:.75rem;color:var(--muted);margin-top:4px}
+.progress-bar{height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;margin:10px 0}
+.progress-fill{height:100%;border-radius:4px;transition:width .6s}
+.pred-score{font-size:.78rem;color:var(--muted);display:flex;justify-content:space-between}
+.pred-factors{margin-top:12px;font-size:.78rem;color:var(--muted)}
+.factor{display:flex;align-items:center;gap:6px;margin-top:4px}
+.factor-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+
+/* Alerts */
+.alert-item{display:flex;align-items:center;gap:14px;padding:14px 18px;border-radius:var(--radius-btn);border:1px solid var(--glass-border);background:var(--surface);margin-bottom:8px;transition:background .2s}
+.alert-item:hover{background:var(--surface2)}
+.alert-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.alert-icon.warn{background:rgba(249,170,60,0.12)}.alert-icon.err{background:rgba(239,68,68,0.12)}.alert-icon.info-bg{background:rgba(31,116,236,0.12)}
+.alert-body{flex:1}
+.alert-title-text{font-size:.85rem;font-weight:600}
+.alert-sub{font-size:.75rem;color:var(--muted);margin-top:2px}
+.alert-actions{display:flex;gap:6px}
+.alert-btn{padding:5px 12px;border-radius:var(--radius-btn);border:1px solid var(--glass-border);background:transparent;color:var(--muted);font-size:.72rem;cursor:pointer;transition:all .2s}
+.alert-btn:hover{color:var(--text);border-color:var(--text)}
+.alert-btn.done{border-color:var(--green);color:var(--green)}
+
+/* Insights */
+.insights-grid{display:grid;grid-template-columns:280px 1fr;gap:20px}
+.agent-list{display:flex;flex-direction:column;gap:8px}
+.agent-score-card{padding:14px;border-radius:var(--radius-btn);border:1px solid var(--glass-border);background:var(--surface);cursor:pointer;transition:all .2s}
+.agent-score-card:hover,.agent-score-card.active{border-color:var(--primary);background:rgba(149,102,242,0.06)}
+.agent-score-card .name{font-weight:600;font-size:.85rem;margin-bottom:6px}
+.score-row{display:flex;justify-content:space-between;font-size:.75rem;color:var(--muted)}
+.insight-detail .card{margin-bottom:12px}
+.insight-list{list-style:none;font-size:.82rem}
+.insight-list li{padding:4px 0;display:flex;align-items:flex-start;gap:6px}
+.insight-list li::before{content:'';width:5px;height:5px;border-radius:50%;margin-top:7px;flex-shrink:0}
+.positive li::before{background:var(--green)}.negative li::before{background:var(--red)}
+
+/* Team colors */
+.team-azul{color:var(--blue)}.team-amarela{color:var(--yellow)}
+
+/* Animations */
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.animate-in{animation:fadeIn .4s ease-out}
+@keyframes countUp{from{opacity:0}to{opacity:1}}
+
+/* Live timestamp */
+.live-ts{display:inline-flex;align-items:center;gap:6px;font-size:.7rem;color:var(--muted);background:var(--surface);border:1px solid var(--glass-border);padding:4px 12px;border-radius:9999px;margin-bottom:12px}
+.live-dot{width:6px;height:6px;background:var(--green);border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* Mobile */
+.menu-toggle{display:none;background:none;border:none;color:var(--text);cursor:pointer;padding:8px}
+.menu-toggle svg{width:24px;height:24px}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:40}
+@media(max-width:768px){
+  .sidebar{transform:translateX(-100%)}
+  .sidebar.open{transform:translateX(0)}
+  .overlay.open{display:block}
+  .main{margin-left:0;width:100%;padding:16px}
+  .menu-toggle{display:block}
+  .kpi-grid{grid-template-columns:1fr 1fr}
+  .ranking{grid-template-columns:1fr}
+  .insights-grid{grid-template-columns:1fr}
+  .pred-grid{grid-template-columns:1fr}
+}
+@media(max-width:480px){
+  .kpi-grid{grid-template-columns:1fr}
+  .bar-label{width:100px;font-size:.75rem}
+}
+
+/* Demo banner */
+.demo-banner{background:linear-gradient(135deg,var(--primary),var(--blue));color:#fff;text-align:center;padding:10px 16px;font-size:.82rem;font-weight:600;position:fixed;top:0;left:0;right:0;z-index:100;letter-spacing:.02em}
+.demo-banner a{color:#fff;text-decoration:underline}
+.app{margin-top:40px}
+.sidebar{top:40px;height:calc(100vh - 40px)}
+</style>
+</head>
+<body>
+
+<div class="demo-banner">
+  Demonstração Interativa — SuperGerente · Painel de Gestão Comercial
+</div>
+
+<div class="overlay" id="overlay" onclick="toggleMenu()"></div>
+
+<div class="app">
+<!-- Sidebar -->
+<aside class="sidebar" id="sidebar">
+  <div class="logo-area">
+    <svg viewBox="0 0 512 512"><defs><linearGradient id="lg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#9566F2"/><stop offset="100%" stop-color="#1F74EC"/></linearGradient></defs><rect width="512" height="512" rx="108" fill="url(#lg)"/><line x1="100" y1="380" x2="412" y2="380" stroke="#fff" stroke-width="1.5" stroke-opacity=".12"/><rect x="90" y="330" width="42" height="50" rx="6" fill="#fff" fill-opacity=".12"/><rect x="146" y="300" width="42" height="80" rx="6" fill="#fff" fill-opacity=".15"/><rect x="202" y="265" width="42" height="115" rx="6" fill="#fff" fill-opacity=".18"/><circle cx="340" cy="185" r="42" fill="#fff" fill-opacity=".95"/><path d="M340 227C300 227 272 255 268 295L268 400 412 400 412 295C408 255 380 227 340 227Z" fill="#fff" fill-opacity=".9"/></svg>
+    <span>SuperGerente</span>
+  </div>
+  <nav>
+    <a class="nav-item active" onclick="showPage('dashboard')" id="nav-dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+      Dashboard
+    </a>
+    <a class="nav-item" onclick="showPage('diario')" id="nav-diario">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Diário
+    </a>
+    <a class="nav-item" onclick="showPage('tmf')" id="nav-tmf">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      TMF
+    </a>
+    <a class="nav-item" onclick="showPage('motivos')" id="nav-motivos">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+      Motivos Perda
+    </a>
+    <a class="nav-item" onclick="showPage('predictions')" id="nav-predictions">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+      Previsões IA
+    </a>
+    <a class="nav-item" onclick="showPage('chat')" id="nav-chat">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      Chat IA
+    </a>
+    <a class="nav-item" onclick="showPage('agents')" id="nav-agents">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Agentes
+    </a>
+    <a class="nav-item" onclick="showPage('alerts')" id="nav-alerts">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      Alertas
+    </a>
+    <a class="nav-item" onclick="showPage('insights')" id="nav-insights">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2a8 8 0 0 0-8 8c0 3.4 2.1 6.3 5 7.4V20h6v-2.6c2.9-1.1 5-4 5-7.4a8 8 0 0 0-8-8z"/><line x1="9" y1="22" x2="15" y2="22"/></svg>
+      Insights
+    </a>
+    <div class="nav-section">Administração</div>
+    <a class="nav-item" onclick="showPage('admin')" id="nav-admin">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Admin
+    </a>
+  </nav>
+  <div class="sidebar-footer">
+    <a class="nav-item" style="pointer-events:none;opacity:.5">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Perfil
+    </a>
+  </div>
+</aside>
+
+<!-- Main Content -->
+<main class="main">
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="menu-toggle" onclick="toggleMenu()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <h2>Olá, <strong>Demo</strong></h2>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px">
+      <div class="chip active" style="font-size:.72rem;padding:4px 12px">Empresa Demo</div>
+      <div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--blue));display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;color:#fff">DM</div>
+    </div>
+  </div>
+
+  <!-- ===== DASHBOARD ===== -->
+  <div class="page active animate-in" id="page-dashboard">
+    <div class="live-ts"><span class="live-dot"></span>Atualizado às 14:32:05 · Dados em tempo real</div>
+
+    <div class="filters">
+      <span class="chip active">Todos</span>
+      <span class="chip">Equipe Azul</span>
+      <span class="chip">Equipe Amarela</span>
+      <select class="filter-select"><option>Todos os Grupos</option><option>Equipe Jorge</option><option>Equipe Felipe</option></select>
+      <select class="filter-select"><option>Todos os Funis</option><option>Residencial</option><option>Comercial</option><option>Premium</option></select>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#9566F2" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/></svg></div>
+        <div><div class="kpi-label">Leads Novos Hoje</div><div class="kpi-value">47</div></div>
+      </div>
+      <div class="kpi info">
+        <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#1F74EC" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
+        <div><div class="kpi-label">Leads Ativos</div><div class="kpi-value">1.284</div></div>
+      </div>
+      <div class="kpi success">
+        <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
+        <div><div class="kpi-label">Novos no Mês</div><div class="kpi-value">892</div></div>
+      </div>
+      <div class="kpi danger">
+        <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg></div>
+        <div><div class="kpi-label">Alertas Ativos</div><div class="kpi-value">12</div></div>
+      </div>
+    </div>
+
+    <!-- Team Summary -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px">
+      <div class="card">
+        <div class="card-title"><span style="width:10px;height:10px;background:var(--blue);border-radius:50%;display:inline-block"></span> Equipe Azul</div>
+        <table>
+          <thead><tr><th>Pipeline</th><th>Hoje</th><th>Mês</th><th>Ativos</th></tr></thead>
+          <tbody>
+            <tr><td>Residencial</td><td style="color:var(--primary);font-weight:600">12</td><td>287</td><td>456</td></tr>
+            <tr><td>Comercial</td><td style="color:var(--primary);font-weight:600">8</td><td>195</td><td>312</td></tr>
+            <tr><td>Premium</td><td style="color:var(--primary);font-weight:600">5</td><td>98</td><td>178</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-title"><span style="width:10px;height:10px;background:var(--yellow);border-radius:50%;display:inline-block"></span> Equipe Amarela</div>
+        <table>
+          <thead><tr><th>Pipeline</th><th>Hoje</th><th>Mês</th><th>Ativos</th></tr></thead>
+          <tbody>
+            <tr><td>Residencial</td><td style="color:var(--primary);font-weight:600">9</td><td>210</td><td>198</td></tr>
+            <tr><td>Comercial</td><td style="color:var(--primary);font-weight:600">7</td><td>145</td><td>112</td></tr>
+            <tr><td>Investimento</td><td style="color:var(--primary);font-weight:600">6</td><td>57</td><td>28</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Bar Charts + Ranking -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px">
+      <div class="card">
+        <div class="card-title">Vendas por Agente — Equipe Azul</div>
+        <div class="bar-chart">
+          <div class="bar-row"><span class="bar-label">Felipe Souza</span><div class="bar-wrapper"><div class="bar-track"><div class="bar-fill" style="width:92%;background:var(--blue)"></div></div><span class="bar-value">23 vendas</span></div></div>
+          <div class="bar-row"><span class="bar-label">Jorge Lima</span><div class="bar-wrapper"><div class="bar-track"><div class="bar-fill" style="width:78%;background:var(--blue)"></div></div><span class="bar-value">19 vendas</span></div></div>
+          <div class="bar-row"><span class="bar-label">Marcos Reis</span><div class="bar-wrapper"><div class="bar-track"><div class="bar-fill" style="width:65%;background:var(--blue)"></div></div><span class="bar-value">16 vendas</span></div></div>
+          <div class="bar-row"><span class="bar-label">Ana Clara</span><div class="bar-wrapper"><div class="bar-track"><div class="bar-fill" style="width:52%;background:var(--blue)"></div></div><span class="bar-value">13 vendas</span></div></div>
+          <div class="bar-row"><span class="bar-label">Pedro Neto</span><div class="bar-wrapper"><div class="bar-track"><div class="bar-fill" style="width:39%;background:var(--blue)"></div></div><span class="bar-value">10 vendas</span></div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Vendas por Agente — Equipe Amarela</div>
+        <div class="bar-chart">
+          <div class="bar-row"><span class="bar-label">Saul Mendes</span><div class="bar-wrapper"><div class="bar-track"><div class="bar-fill" style="width:88%;background:var(--yellow)"></div></div><span class="bar-value">18 vendas</span></div></div>
+          <div class="bar-row"><span class="bar-label">Otávio Pires</span><div class="bar-wrapper"><div class="bar-track"><div class="bar-fill" style="width:72%;background:var(--yellow)"></div></div><span class="bar-value">15 vendas</span></div></div>
+          <div class="bar-row"><span class="bar-label">Roberto Silva</span><div class="bar-wrapper"><div class="bar-track"><div class="bar-fill" style="width:55%;background:var(--yellow)"></div></div><span class="bar-value">11 vendas</span></div></div>
+          <div class="bar-row"><span class="bar-label">Carla Dias</span><div class="bar-wrapper"><div class="bar-track"><div class="bar-fill" style="width:40%;background:var(--yellow)"></div></div><span class="bar-value">8 vendas</span></div></div>
+          <div class="bar-row"><span class="bar-label">Lucas Alves</span><div class="bar-wrapper"><div class="bar-track"><div class="bar-fill" style="width:28%;background:var(--yellow)"></div></div><span class="bar-value">6 vendas</span></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rankings -->
+    <div class="card">
+      <div class="card-title">Ranking de Vendas</div>
+      <div class="ranking">
+        <div>
+          <h4 style="font-size:.85rem;color:var(--muted);margin-bottom:12px">Top Vendas — Hoje</h4>
+          <ul class="rank-list">
+            <li class="rank-item"><span class="rank-pos rank-1">1</span><span class="rank-name">Felipe Souza</span><span class="rank-value" style="color:var(--green)">5</span></li>
+            <li class="rank-item"><span class="rank-pos rank-2">2</span><span class="rank-name">Saul Mendes</span><span class="rank-value" style="color:var(--green)">4</span></li>
+            <li class="rank-item"><span class="rank-pos rank-3">3</span><span class="rank-name">Jorge Lima</span><span class="rank-value" style="color:var(--green)">3</span></li>
+            <li class="rank-item"><span class="rank-pos rank-4">4</span><span class="rank-name">Otávio Pires</span><span class="rank-value">3</span></li>
+            <li class="rank-item"><span class="rank-pos rank-5">5</span><span class="rank-name">Ana Clara</span><span class="rank-value">2</span></li>
+          </ul>
+        </div>
+        <div>
+          <h4 style="font-size:.85rem;color:var(--muted);margin-bottom:12px">Top Vendas — Semana</h4>
+          <ul class="rank-list">
+            <li class="rank-item"><span class="rank-pos rank-1">1</span><span class="rank-name">Felipe Souza</span><span class="rank-value" style="color:var(--green)">23</span></li>
+            <li class="rank-item"><span class="rank-pos rank-2">2</span><span class="rank-name">Jorge Lima</span><span class="rank-value" style="color:var(--green)">19</span></li>
+            <li class="rank-item"><span class="rank-pos rank-3">3</span><span class="rank-name">Saul Mendes</span><span class="rank-value" style="color:var(--green)">18</span></li>
+            <li class="rank-item"><span class="rank-pos rank-4">4</span><span class="rank-name">Otávio Pires</span><span class="rank-value">15</span></li>
+            <li class="rank-item"><span class="rank-pos rank-5">5</span><span class="rank-name">Marcos Reis</span><span class="rank-value">16</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== DIARIO ===== -->
+  <div class="page" id="page-diario">
+    <h3 class="section-title">Diário</h3>
+    <div class="filters">
+      <input type="date" class="date-input" value="2026-03-10">
+      <span class="chip active">Todos</span>
+      <span class="chip">Equipe Azul</span>
+      <span class="chip">Equipe Amarela</span>
+      <select class="filter-select"><option>Todos os Funis</option></select>
+      <select class="filter-select"><option>Todos os Agentes</option></select>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#9566F2" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/></svg></div><div><div class="kpi-label">Leads do Dia</div><div class="kpi-value">47</div></div></div>
+      <div class="kpi success"><div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div><div><div class="kpi-label">Vendas do Dia</div><div class="kpi-value">8</div></div></div>
+      <div class="kpi warning"><div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#F9AA3C" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v.01M12 8v4"/></svg></div><div><div class="kpi-label">Conversão Dia</div><div class="kpi-value">17.0%</div></div></div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi info"><div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#1F74EC" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/></svg></div><div><div class="kpi-label">Leads no Mês</div><div class="kpi-value">892</div></div></div>
+      <div class="kpi success"><div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/></svg></div><div><div class="kpi-label">Vendas no Mês</div><div class="kpi-value">156</div></div></div>
+      <div class="kpi warning"><div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#F9AA3C" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg></div><div><div class="kpi-label">Conversão Mês</div><div class="kpi-value">17.5%</div></div></div>
+    </div>
+  </div>
+
+  <!-- ===== TMF ===== -->
+  <div class="page" id="page-tmf">
+    <h3 class="section-title">Tempo Médio de Fechamento</h3>
+    <div class="filters">
+      <input type="date" class="date-input" value="2026-02-10"><span style="color:var(--muted);font-size:.8rem">até</span><input type="date" class="date-input" value="2026-03-10">
+      <span class="chip active">Todos</span><span class="chip">Equipe Azul</span><span class="chip">Equipe Amarela</span>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#9566F2" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div><div class="kpi-label">TMF Geral</div><div class="kpi-value">4.2 dias</div></div></div>
+      <div class="kpi success"><div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/></svg></div><div><div class="kpi-label">Fechamento do Dia</div><div class="kpi-value">8</div></div></div>
+      <div class="kpi info"><div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#1F74EC" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg></div><div><div class="kpi-label">Remarketing</div><div class="kpi-value">34</div></div></div>
+      <div class="kpi warning"><div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#F9AA3C" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg></div><div><div class="kpi-label">% Remarketing</div><div class="kpi-value">21.8%</div></div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">TMF por Agente</div>
+      <table><thead><tr><th>Agente</th><th>Fech. Dia</th><th>Remarketing</th><th>TMF</th></tr></thead>
+      <tbody>
+        <tr><td>Felipe Souza</td><td>3</td><td>8</td><td><span class="badge badge-success">2.8 dias</span></td></tr>
+        <tr><td>Jorge Lima</td><td>2</td><td>6</td><td><span class="badge badge-success">3.5 dias</span></td></tr>
+        <tr><td>Saul Mendes</td><td>2</td><td>7</td><td><span class="badge badge-warning">4.1 dias</span></td></tr>
+        <tr><td>Marcos Reis</td><td>1</td><td>5</td><td><span class="badge badge-warning">5.2 dias</span></td></tr>
+        <tr><td>Ana Clara</td><td>0</td><td>4</td><td><span class="badge badge-danger">6.8 dias</span></td></tr>
+        <tr><td>Pedro Neto</td><td>0</td><td>4</td><td><span class="badge badge-danger">7.3 dias</span></td></tr>
+      </tbody></table>
+    </div>
+  </div>
+
+  <!-- ===== MOTIVOS PERDA ===== -->
+  <div class="page" id="page-motivos">
+    <h3 class="section-title">Motivos de Perda</h3>
+    <div class="filters">
+      <input type="date" class="date-input" value="2026-02-10"><span style="color:var(--muted);font-size:.8rem">até</span><input type="date" class="date-input" value="2026-03-10">
+      <span class="chip active">Todos</span><span class="chip">Equipe Azul</span><span class="chip">Equipe Amarela</span>
+    </div>
+    <div class="kpi-grid" style="grid-template-columns:220px">
+      <div class="kpi danger"><div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></div><div><div class="kpi-label">Total Perdidos</div><div class="kpi-value">234</div></div></div>
+    </div>
+    <div class="card">
+      <div class="bar-chart">
+        <div class="bar-row"><span class="bar-label">Sem resposta 30D</span><div class="bar-wrapper"><div class="bar-track"><div class="bar-fill" style="width:85%;background:#9566F2"></div></div><span class="bar-value">72 (30.8%)</span></div></div>
+        <div class="bar-row"><span class="bar-label">Desqualificado</span><div class="bar-wrapper"><div class="bar-track"><div class="bar-fill" style="width:65%;background:#E05D6F"></div></div><span class="bar-value">55 (23.5%)</span></div></div>
+        <div class="bar-row"><span class="bar-label">Questões de preço</span><div class="bar-wrapper"><div class="bar-track"><div class="bar-fill" style="width:45%;background:#4ECDC4"></div></div><span class="bar-value">38 (16.2%)</span></div></div>
+        <div class="bar-row"><span class="bar-label">Comprou concorrente</span><div class="bar-wrapper"><div class="bar-track"><div class="bar-fill" style="width:30%;background:#FFE66D"></div></div><span class="bar-value">26 (11.1%)</span></div></div>
+        <div class="bar-row"><span class="bar-label">Timing errado</span><div class="bar-wrapper"><div class="bar-track"><div class="bar-fill" style="width:22%;background:#FF6B6B"></div></div><span class="bar-value">19 (8.1%)</span></div></div>
+        <div class="bar-row"><span class="bar-label">Sem orçamento</span><div class="bar-wrapper"><div class="bar-track"><div class="bar-fill" style="width:15%;background:#45B7D1"></div></div><span class="bar-value">14 (6.0%)</span></div></div>
+        <div class="bar-row"><span class="bar-label">Outros</span><div class="bar-wrapper"><div class="bar-track"><div class="bar-fill" style="width:10%;background:#96CEB4"></div></div><span class="bar-value">10 (4.3%)</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== PREVISOES ===== -->
+  <div class="page" id="page-predictions">
+    <h3 class="section-title">Previsões de Venda — IA</h3>
+    <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr)">
+      <div class="kpi success"><div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/></svg></div><div><div class="kpi-label">Alta Probabilidade</div><div class="kpi-value">28</div></div></div>
+      <div class="kpi warning"><div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#F9AA3C" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg></div><div><div class="kpi-label">Média Probabilidade</div><div class="kpi-value">45</div></div></div>
+      <div class="kpi danger"><div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/></svg></div><div><div class="kpi-label">Baixa Probabilidade</div><div class="kpi-value">19</div></div></div>
+    </div>
+    <div class="pred-grid">
+      <div class="pred-card">
+        <div class="pred-header"><div><div class="pred-title">João Mendes — Apto 302</div><div class="pred-meta">Felipe Souza · Residencial</div></div><span class="badge badge-success">Alto</span></div>
+        <div class="progress-bar"><div class="progress-fill" style="width:87%;background:var(--green)"></div></div>
+        <div class="pred-score"><span>Score: 87%</span><span>R$ 420.000</span></div>
+        <div class="pred-factors"><strong>Fatores:</strong>
+          <div class="factor"><span class="factor-dot" style="background:var(--green)"></span> Respondeu em &lt;1h nos últimos 3 contatos</div>
+          <div class="factor"><span class="factor-dot" style="background:var(--green)"></span> Visitou imóvel 2x na semana</div>
+          <div class="factor"><span class="factor-dot" style="background:var(--yellow)"></span> Pediu simulação de financiamento</div>
+        </div>
+      </div>
+      <div class="pred-card">
+        <div class="pred-header"><div><div class="pred-title">Maria Costa — Sala Comercial</div><div class="pred-meta">Jorge Lima · Comercial</div></div><span class="badge badge-success">Alto</span></div>
+        <div class="progress-bar"><div class="progress-fill" style="width:82%;background:var(--green)"></div></div>
+        <div class="pred-score"><span>Score: 82%</span><span>R$ 890.000</span></div>
+        <div class="pred-factors"><strong>Fatores:</strong>
+          <div class="factor"><span class="factor-dot" style="background:var(--green)"></span> Empresa com CNPJ ativo há 5+ anos</div>
+          <div class="factor"><span class="factor-dot" style="background:var(--green)"></span> Solicitou contrato para análise jurídica</div>
+          <div class="factor"><span class="factor-dot" style="background:var(--red)"></span> Negociando preço agressivamente</div>
+        </div>
+      </div>
+      <div class="pred-card">
+        <div class="pred-header"><div><div class="pred-title">Carlos Ramos — Lote 45</div><div class="pred-meta">Saul Mendes · Investimento</div></div><span class="badge badge-warning">Médio</span></div>
+        <div class="progress-bar"><div class="progress-fill" style="width:58%;background:var(--yellow)"></div></div>
+        <div class="pred-score"><span>Score: 58%</span><span>R$ 165.000</span></div>
+        <div class="pred-factors"><strong>Fatores:</strong>
+          <div class="factor"><span class="factor-dot" style="background:var(--green)"></span> Já tem experiência com investimentos</div>
+          <div class="factor"><span class="factor-dot" style="background:var(--yellow)"></span> Comparando com 3 concorrentes</div>
+          <div class="factor"><span class="factor-dot" style="background:var(--red)"></span> Tempo de resposta aumentando</div>
+        </div>
+      </div>
+      <div class="pred-card">
+        <div class="pred-header"><div><div class="pred-title">Fernanda Alves — Studio</div><div class="pred-meta">Ana Clara · Premium</div></div><span class="badge badge-danger">Baixo</span></div>
+        <div class="progress-bar"><div class="progress-fill" style="width:25%;background:var(--red)"></div></div>
+        <div class="pred-score"><span>Score: 25%</span><span>R$ 310.000</span></div>
+        <div class="pred-factors"><strong>Fatores:</strong>
+          <div class="factor"><span class="factor-dot" style="background:var(--red)"></span> Sem resposta há 12 dias</div>
+          <div class="factor"><span class="factor-dot" style="background:var(--red)"></span> Recusou 2 propostas anteriores</div>
+          <div class="factor"><span class="factor-dot" style="background:var(--yellow)"></span> Lead originário de campanha paga</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== CHAT IA ===== -->
+  <div class="page" id="page-chat">
+    <h3 class="section-title">Chat IA — Mentoria de Vendas</h3>
+    <div class="chat-container">
+      <div class="chat-mentors">
+        <span class="mentor-chip active">Padrão</span>
+        <span class="mentor-chip">Conselho Completo</span>
+        <span class="mentor-chip">Jordan Belfort</span>
+        <span class="mentor-chip">Grant Cardone</span>
+        <span class="mentor-chip">Ciro Bottini</span>
+        <span class="mentor-chip">Flávio Augusto</span>
+      </div>
+      <div class="chat-messages">
+        <div class="msg assistant">Olá! Sou seu mentor de vendas com IA. Posso analisar sua performance, sugerir estratégias de fechamento, ajudar com objeções de clientes e muito mais. Como posso te ajudar hoje?</div>
+        <div class="msg user">Meu lead João Mendes está há 3 dias sem responder. O que devo fazer?</div>
+        <div class="msg assistant">
+          <strong>Análise da situação:</strong> Lead com 3 dias de inatividade é preocupante, mas ainda recuperável. Aqui vão 3 estratégias:<br><br>
+          <strong>1. Mensagem de valor</strong> — Envie algo novo: um vídeo curto do empreendimento, uma condição especial ou notícia relevante do mercado. Não pergunte "ainda tem interesse?"<br><br>
+          <strong>2. Canal alternativo</strong> — Se estava no WhatsApp, tente uma ligação curta. Às vezes a mensagem se perdeu.<br><br>
+          <strong>3. Gatilho de escassez</strong> — "João, a unidade 302 que você gostou teve mais 2 visitas essa semana. Quero te manter prioridade."<br><br>
+          <em>Dica: Baseado nos dados, leads que recebem follow-up no dia 3 têm 2.4x mais chance de reengajar do que no dia 5+.</em>
+        </div>
+        <div class="msg user">Ele disse que está comparando com concorrentes. Como contorno?</div>
+        <div class="msg assistant">
+          <strong>Objeção: Comparação com concorrentes</strong><br><br>
+          Isso é positivo — significa que ele está em fase ativa de decisão. O segredo é <strong>não atacar concorrentes</strong>, mas sim reforçar seus diferenciais:<br><br>
+          ✅ "Excelente que você está pesquisando. Posso te ajudar a comparar os pontos mais importantes? Localização, valorização projetada e condições de pagamento costumam ser decisivos."<br><br>
+          ✅ Pergunte: "O que mais te chamou atenção nas outras opções?" — Isso revela exatamente o que ele valoriza.<br><br>
+          ✅ Use dados: "Nosso empreendimento valorizou 32% nos últimos 18 meses na região."<br><br>
+          <strong>Timing:</strong> Agende uma visita presencial o quanto antes. 73% dos leads que visitam fecham em até 10 dias.
+        </div>
+      </div>
+      <div class="chat-input-area">
+        <input class="chat-input" placeholder="Pergunte ao mentor..." disabled>
+        <button class="chat-send" disabled>Enviar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== AGENTES ===== -->
+  <div class="page" id="page-agents">
+    <h3 class="section-title">Performance por Agente</h3>
+    <div class="filters">
+      <span class="chip active">Todos</span><span class="chip">Equipe Azul</span><span class="chip">Equipe Amarela</span>
+      <select class="filter-select"><option>Todos os Funis</option></select>
+    </div>
+    <div class="card" style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Agente</th><th>Total Leads</th><th>Venda Ganha</th><th>Venda Perdida</th><th>Conversão %</th><th>Residencial</th><th>Comercial</th><th>Premium</th></tr></thead>
+        <tbody>
+          <tr><td style="font-weight:600">Felipe Souza</td><td>342</td><td style="color:var(--green);font-weight:600">67</td><td style="color:var(--red)">28</td><td><span class="badge badge-success">19.6%</span></td><td>198</td><td>112</td><td>32</td></tr>
+          <tr><td style="font-weight:600">Jorge Lima</td><td>298</td><td style="color:var(--green);font-weight:600">51</td><td style="color:var(--red)">35</td><td><span class="badge badge-success">17.1%</span></td><td>165</td><td>98</td><td>35</td></tr>
+          <tr><td style="font-weight:600">Saul Mendes</td><td>276</td><td style="color:var(--green);font-weight:600">48</td><td style="color:var(--red)">31</td><td><span class="badge badge-success">17.4%</span></td><td>142</td><td>89</td><td>45</td></tr>
+          <tr><td style="font-weight:600">Marcos Reis</td><td>231</td><td style="color:var(--green);font-weight:600">34</td><td style="color:var(--red)">29</td><td><span class="badge badge-warning">14.7%</span></td><td>120</td><td>78</td><td>33</td></tr>
+          <tr><td style="font-weight:600">Ana Clara</td><td>198</td><td style="color:var(--green);font-weight:600">28</td><td style="color:var(--red)">22</td><td><span class="badge badge-warning">14.1%</span></td><td>105</td><td>65</td><td>28</td></tr>
+          <tr><td style="font-weight:600">Pedro Neto</td><td>187</td><td style="color:var(--green);font-weight:600">22</td><td style="color:var(--red)">26</td><td><span class="badge badge-danger">11.8%</span></td><td>95</td><td>62</td><td>30</td></tr>
+          <tr><td style="font-weight:600">Otávio Pires</td><td>245</td><td style="color:var(--green);font-weight:600">42</td><td style="color:var(--red)">30</td><td><span class="badge badge-success">17.1%</span></td><td>135</td><td>75</td><td>35</td></tr>
+          <tr><td style="font-weight:600">Roberto Silva</td><td>189</td><td style="color:var(--green);font-weight:600">26</td><td style="color:var(--red)">24</td><td><span class="badge badge-warning">13.8%</span></td><td>98</td><td>58</td><td>33</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===== ALERTAS ===== -->
+  <div class="page" id="page-alerts">
+    <h3 class="section-title">Alertas Ativos</h3>
+    <div class="filters">
+      <span class="chip active">Todos</span>
+      <span class="chip">+48h</span>
+      <span class="chip">+7 dias</span>
+      <span class="chip">Tarefas</span>
+      <span class="chip">DDD Proibido</span>
+    </div>
+    <div>
+      <div class="alert-item"><div class="alert-icon warn"><svg viewBox="0 0 24 24" fill="none" stroke="#F9AA3C" stroke-width="2" width="18" height="18"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div class="alert-body"><div class="alert-title-text">Lead sem atividade há 52h</div><div class="alert-sub">Ricardo Santos · Residencial · Agente: Felipe Souza</div></div><div class="alert-actions"><button class="alert-btn done">Concluir</button><button class="alert-btn">Arquivar</button></div></div>
+      <div class="alert-item"><div class="alert-icon err"><svg viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2" width="18" height="18"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg></div><div class="alert-body"><div class="alert-title-text">Lead em risco — 9 dias sem contato</div><div class="alert-sub">Amanda Ferreira · Comercial · Agente: Jorge Lima</div></div><div class="alert-actions"><button class="alert-btn done">Concluir</button><button class="alert-btn">Arquivar</button></div></div>
+      <div class="alert-item"><div class="alert-icon warn"><svg viewBox="0 0 24 24" fill="none" stroke="#F9AA3C" stroke-width="2" width="18" height="18"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div class="alert-body"><div class="alert-title-text">Tarefa vencida: Enviar proposta</div><div class="alert-sub">Paulo Henrique · Premium · Agente: Marcos Reis</div></div><div class="alert-actions"><button class="alert-btn done">Concluir</button><button class="alert-btn">Arquivar</button></div></div>
+      <div class="alert-item"><div class="alert-icon info-bg"><svg viewBox="0 0 24 24" fill="none" stroke="#1F74EC" stroke-width="2" width="18" height="18"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div><div class="alert-body"><div class="alert-title-text">DDD proibido — Lead de região não atendida</div><div class="alert-sub">José Silva (DDD 92) · Residencial · Agente: Ana Clara</div></div><div class="alert-actions"><button class="alert-btn done">Concluir</button><button class="alert-btn">Arquivar</button></div></div>
+      <div class="alert-item"><div class="alert-icon warn"><svg viewBox="0 0 24 24" fill="none" stroke="#F9AA3C" stroke-width="2" width="18" height="18"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div class="alert-body"><div class="alert-title-text">Lead sem atividade há 49h</div><div class="alert-sub">Beatriz Lopes · Investimento · Agente: Saul Mendes</div></div><div class="alert-actions"><button class="alert-btn done">Concluir</button><button class="alert-btn">Arquivar</button></div></div>
+      <div class="alert-item"><div class="alert-icon err"><svg viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2" width="18" height="18"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg></div><div class="alert-body"><div class="alert-title-text">Lead em risco — 11 dias sem contato</div><div class="alert-sub">Rodrigo Prado · Comercial · Agente: Pedro Neto</div></div><div class="alert-actions"><button class="alert-btn done">Concluir</button><button class="alert-btn">Arquivar</button></div></div>
+    </div>
+  </div>
+
+  <!-- ===== INSIGHTS ===== -->
+  <div class="page" id="page-insights">
+    <h3 class="section-title">Insights — Análise de Conversas por IA</h3>
+    <div class="filters">
+      <span class="chip active">Todos</span><span class="chip">Equipe Azul</span><span class="chip">Equipe Amarela</span>
+      <select class="filter-select"><option>Todos os Funis</option></select>
+      <button style="padding:8px 18px;border-radius:var(--radius-btn);background:linear-gradient(135deg,var(--primary),var(--blue));color:#fff;border:none;font-weight:600;cursor:default;font-size:.82rem">Gerar Insights</button>
+    </div>
+    <div class="insights-grid">
+      <div class="agent-list">
+        <div class="agent-score-card active"><div class="name">Felipe Souza</div><div class="score-row"><span>Sentimento</span><span style="color:var(--green)">8.4/10</span></div><div class="score-row"><span>Qualidade</span><span style="color:var(--green)">9.1/10</span></div><div class="score-row"><span>Conversas</span><span>47</span></div></div>
+        <div class="agent-score-card"><div class="name">Jorge Lima</div><div class="score-row"><span>Sentimento</span><span style="color:var(--green)">7.8/10</span></div><div class="score-row"><span>Qualidade</span><span style="color:var(--yellow)">7.2/10</span></div><div class="score-row"><span>Conversas</span><span>38</span></div></div>
+        <div class="agent-score-card"><div class="name">Ana Clara</div><div class="score-row"><span>Sentimento</span><span style="color:var(--yellow)">6.5/10</span></div><div class="score-row"><span>Qualidade</span><span style="color:var(--yellow)">6.8/10</span></div><div class="score-row"><span>Conversas</span><span>31</span></div></div>
+        <div class="agent-score-card"><div class="name">Pedro Neto</div><div class="score-row"><span>Sentimento</span><span style="color:var(--red)">5.2/10</span></div><div class="score-row"><span>Qualidade</span><span style="color:var(--red)">5.5/10</span></div><div class="score-row"><span>Conversas</span><span>25</span></div></div>
+      </div>
+      <div class="insight-detail">
+        <div class="card"><div class="card-title">Resumo — Felipe Souza</div><p style="font-size:.85rem;color:var(--muted);line-height:1.7">Felipe demonstra excelente domínio nas técnicas de rapport e fechamento. Suas conversas têm tom profissional com empatia, faz perguntas abertas e apresenta soluções personalizadas. Tempo médio de resposta de 12 min — o mais rápido da equipe.</p></div>
+        <div class="card"><div class="card-title" style="color:var(--green)">Pontos Positivos</div><ul class="insight-list positive"><li>Responde em menos de 15 min na maioria dos casos</li><li>Usa nome do cliente naturalmente na conversa</li><li>Apresenta dados de valorização em 80% das negociações</li><li>Follow-up consistente a cada 2-3 dias</li></ul></div>
+        <div class="card"><div class="card-title" style="color:var(--red)">Pontos de Melhoria</div><ul class="insight-list negative"><li>Poderia usar mais perguntas de qualificação no primeiro contato</li><li>Pouca menção a urgência/escassez nos fechamentos</li><li>Algumas respostas muito longas — poderia ser mais direto</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== ADMIN ===== -->
+  <div class="page" id="page-admin">
+    <h3 class="section-title">Administração</h3>
+    <div class="card">
+      <div class="card-title">Pipelines</div>
+      <table><thead><tr><th>Pipeline</th><th>Equipe</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>Residencial</td><td><span class="badge badge-blue">Azul</span></td><td><span class="badge badge-success">Visível</span></td></tr>
+        <tr><td>Comercial</td><td><span class="badge badge-blue">Azul</span></td><td><span class="badge badge-success">Visível</span></td></tr>
+        <tr><td>Premium</td><td><span class="badge badge-blue">Azul</span></td><td><span class="badge badge-success">Visível</span></td></tr>
+        <tr><td style="opacity:.5">Teste Interno</td><td><span class="badge badge-blue">Azul</span></td><td><span class="badge badge-danger">Oculto</span></td></tr>
+        <tr><td>Residencial</td><td><span class="badge badge-warning">Amarela</span></td><td><span class="badge badge-success">Visível</span></td></tr>
+        <tr><td>Investimento</td><td><span class="badge badge-warning">Amarela</span></td><td><span class="badge badge-success">Visível</span></td></tr>
+      </tbody></table>
+    </div>
+    <div class="card">
+      <div class="card-title">Usuários</div>
+      <table><thead><tr><th>Nome</th><th>Email</th><th>Perfil</th><th>Status</th><th>Times</th></tr></thead>
+      <tbody>
+        <tr><td>Admin Demo</td><td>admin@demo.com</td><td><span class="badge badge-primary">Admin</span></td><td><span class="badge badge-success">Aprovado</span></td><td>Azul, Amarela</td></tr>
+        <tr><td>Felipe Souza</td><td>felipe@demo.com</td><td><span class="badge" style="background:var(--surface2);color:var(--text)">Usuário</span></td><td><span class="badge badge-success">Aprovado</span></td><td>Azul</td></tr>
+        <tr><td>Saul Mendes</td><td>saul@demo.com</td><td><span class="badge" style="background:var(--surface2);color:var(--text)">Usuário</span></td><td><span class="badge badge-success">Aprovado</span></td><td>Amarela</td></tr>
+        <tr><td style="opacity:.7">Novo Vendedor</td><td style="opacity:.7">novo@demo.com</td><td><span class="badge" style="background:var(--surface2);color:var(--text)">Usuário</span></td><td><span class="badge badge-warning">Pendente</span></td><td>—</td></tr>
+      </tbody></table>
+    </div>
+  </div>
+
+</main>
+</div>
+
+<script>
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const page = document.getElementById('page-' + id);
+  const nav = document.getElementById('nav-' + id);
+  if (page) { page.classList.add('active'); page.classList.add('animate-in'); }
+  if (nav) nav.classList.add('active');
+  // Close mobile menu
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('overlay').classList.remove('open');
+}
+
+function toggleMenu() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('overlay').classList.toggle('open');
+}
+
+// Animate bars on page load
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.bar-fill').forEach(bar => {
+    const w = bar.style.width;
+    bar.style.width = '0';
+    setTimeout(() => { bar.style.width = w; }, 100);
+  });
+  // Chip click toggle (cosmetic)
+  document.querySelectorAll('.filters .chip').forEach(chip => {
+    chip.addEventListener('click', function() {
+      const siblings = this.parentElement.querySelectorAll('.chip');
+      siblings.forEach(s => s.classList.remove('active','azul','amarela'));
+      this.classList.add('active');
+      if (this.textContent.includes('Azul')) this.classList.add('azul');
+      if (this.textContent.includes('Amarela')) this.classList.add('amarela');
+    });
+  });
+  // Mentor chip toggle
+  document.querySelectorAll('.mentor-chip').forEach(chip => {
+    chip.addEventListener('click', function() {
+      document.querySelectorAll('.mentor-chip').forEach(c => c.classList.remove('active'));
+      this.classList.add('active');
+    });
+  });
+  // Agent score card toggle
+  document.querySelectorAll('.agent-score-card').forEach(card => {
+    card.addEventListener('click', function() {
+      document.querySelectorAll('.agent-score-card').forEach(c => c.classList.remove('active'));
+      this.classList.add('active');
+    });
+  });
+});
+</script>
+</body>
+</html>
